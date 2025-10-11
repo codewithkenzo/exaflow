@@ -1,0 +1,318 @@
+{
+  "name": "exa-api-integration",
+  "version": "1.0.0",
+  "description": "Expert Exa API integration specialist for comprehensive search, context, research, and content extraction",
+  "author": "Exa Personal Tool",
+  "license": "MIT",
+  "type": "subagent",
+  "model": "inherit",
+  "location": "project",
+  "capabilities": [
+    "Context API integration for code-oriented responses",
+    "Advanced search operations with semantic filtering",
+    "Content extraction with live crawl and subpage support",
+    "Webset management for async search operations",
+    "Research pipeline orchestration with polling",
+    "Batch processing with concurrency control",
+    "Error handling and resiliency patterns"
+  ],
+  "tools": [
+    {
+      "name": "exa-context",
+      "description": "Query Exa Context API for code-oriented responses",
+      "command": "bun",
+      "args": ["dist/cli.js", "context", "{{query}}", "--tokens", "{{tokens}}", "--timeout", "{{timeout}}"],
+      "environment": {
+        "EXA_API_KEY": "{{EXA_API_KEY}}"
+      },
+      "parameters": {
+        "query": {
+          "type": "string",
+          "required": true,
+          "description": "Query string for context retrieval"
+        },
+        "tokens": {
+          "type": "number",
+          "default": 5000,
+          "min": 100,
+          "max": 50000,
+          "description": "Number of tokens for response"
+        },
+        "timeout": {
+          "type": "number",
+          "default": 30000,
+          "min": 1000,
+          "max": 300000,
+          "description": "Request timeout in milliseconds"
+        }
+      },
+      "output": {
+        "type": "json",
+        "schema": {
+          "status": {"type": "string", "enum": ["success", "partial", "error"]},
+          "taskId": {"type": "string"},
+          "timing": {"type": "object"},
+          "citations": {"type": "array"},
+          "data": {"type": "object"}
+        }
+      }
+    },
+    {
+      "name": "exa-search",
+      "description": "Search using Exa Search API with semantic and keyword modes",
+      "command": "bun",
+      "args": ["dist/cli.js", "search", "{{query}}", "--type", "{{searchType}}", "--num-results", "{{numResults}}", "--include-contents", "{{includeContents}}", "--timeout", "{{timeout}}"],
+      "environment": {
+        "EXA_API_KEY": "{{EXA_API_KEY}}"
+      },
+      "parameters": {
+        "query": {
+          "type": "string",
+          "required": true,
+          "description": "Search query string"
+        },
+        "searchType": {
+          "type": "string",
+          "enum": ["auto", "keyword", "neural", "fast"],
+          "default": "auto",
+          "description": "Search type"
+        },
+        "numResults": {
+          "type": "number",
+          "default": 10,
+          "min": 1,
+          "max": 50,
+          "description": "Number of results to return"
+        },
+        "includeContents": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include full content in results"
+        },
+        "timeout": {
+          "type": "number",
+          "default": 30000,
+          "min": 1000,
+          "max": 300000,
+          "description": "Request timeout in milliseconds"
+        }
+      },
+      "output": {
+        "type": "json",
+        "schema": {
+          "status": {"type": "string", "enum": ["success", "partial", "error"]},
+          "taskId": {"type": "string"},
+          "timing": {"type": "object"},
+          "citations": {"type": "array"},
+          "data": {"type": "object"}
+        }
+      }
+    },
+    {
+      "name": "exa-contents",
+      "description": "Extract content from URLs with live crawl and subpages support",
+      "command": "bun",
+      "args": ["dist/cli.js", "contents", "--livecrawl", "{{livecrawl}}", "--subpages", "{{subpages}}", "--subpage-target", "{{subpageTarget}}", "--timeout", "{{timeout}}"],
+      "environment": {
+        "EXA_API_KEY": "{{EXA_API_KEY}}"
+      },
+      "input": {
+        "type": "stdin",
+        "format": "text",
+        "description": "URLs to extract content from (one per line)"
+      },
+      "parameters": {
+        "livecrawl": {
+          "type": "string",
+          "enum": ["always", "fallback", "never"],
+          "default": "fallback",
+          "description": "Live crawl mode"
+        },
+        "subpages": {
+          "type": "number",
+          "default": 0,
+          "min": 0,
+          "max": 20,
+          "description": "Number of subpages to crawl"
+        },
+        "subpageTarget": {
+          "type": "string",
+          "description": "Target subpage sections (comma-separated)"
+        },
+        "timeout": {
+          "type": "number",
+          "default": 30000,
+          "min": 1000,
+          "max": 300000,
+          "description": "Request timeout in milliseconds"
+        }
+      },
+      "output": {
+        "type": "json",
+        "schema": {
+          "status": {"type": "string", "enum": ["success", "partial", "error"]},
+          "taskId": {"type": "string"},
+          "timing": {"type": "object"},
+          "citations": {"type": "array"},
+          "data": {"type": "object"}
+        }
+      }
+    },
+    {
+      "name": "exa-websets",
+      "description": "Manage Exa Websets for async search and enrichment operations",
+      "command": "bun",
+      "args": ["dist/cli.js", "websets", "{{operation}}", "--webset-id", "{{websetId}}", "--search-query", "{{searchQuery}}", "--enrichment-type", "{{enrichmentType}}", "--webhook", "{{webhook}}", "--poll", "{{poll}}", "--timeout", "{{timeout}}"],
+      "environment": {
+        "EXA_API_KEY": "{{EXA_API_KEY}}"
+      },
+      "parameters": {
+        "operation": {
+          "type": "string",
+          "enum": ["create", "search", "poll", "enrich"],
+          "required": true,
+          "description": "Webset operation to perform"
+        },
+        "websetId": {
+          "type": "string",
+          "description": "Webset ID for search/poll/enrich operations"
+        },
+        "searchQuery": {
+          "type": "string",
+          "description": "Search query for search operation"
+        },
+        "enrichmentType": {
+          "type": "string",
+          "description": "Enrichment type for enrich operation"
+        },
+        "webhook": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use webhook mode for async operations"
+        },
+        "poll": {
+          "type": "boolean",
+          "default": false,
+          "description": "Poll for completion"
+        },
+        "timeout": {
+          "type": "number",
+          "default": 30000,
+          "min": 1000,
+          "max": 300000,
+          "description": "Request timeout in milliseconds"
+        }
+      },
+      "output": {
+        "type": "json",
+        "schema": {
+          "status": {"type": "string", "enum": ["success", "partial", "error"]},
+          "taskId": {"type": "string"},
+          "timing": {"type": "object"},
+          "citations": {"type": "array"},
+          "data": {"type": "object"}
+        }
+      }
+    },
+    {
+      "name": "exa-research",
+      "description": "Run research tasks with Exa Research API (async multi-step pipelines)",
+      "command": "bun",
+      "args": ["dist/cli.js", "research", "{{operation}}", "--instructions", "{{instructions}}", "--model", "{{model}}", "--task-id", "{{taskId}}", "--poll", "{{poll}}", "--timeout", "{{timeout}}"],
+      "environment": {
+        "EXA_API_KEY": "{{EXA_API_KEY}}"
+      },
+      "parameters": {
+        "operation": {
+          "type": "string",
+          "enum": ["create", "get", "list"],
+          "default": "create",
+          "description": "Research operation to perform"
+        },
+        "instructions": {
+          "type": "string",
+          "description": "Research instructions for create operation"
+        },
+        "model": {
+          "type": "string",
+          "enum": ["exa-research", "exa-research-pro"],
+          "default": "exa-research",
+          "description": "Research model to use"
+        },
+        "taskId": {
+          "type": "string",
+          "description": "Task ID for get operation"
+        },
+        "poll": {
+          "type": "boolean",
+          "default": false,
+          "description": "Poll for completion"
+        },
+        "timeout": {
+          "type": "number",
+          "default": 30000,
+          "min": 1000,
+          "max": 300000,
+          "description": "Request timeout in milliseconds"
+        }
+      },
+      "output": {
+        "type": "json",
+        "schema": {
+          "status": {"type": "string", "enum": ["success", "partial", "error"]},
+          "taskId": {"type": "string"},
+          "timing": {"type": "object"},
+          "citations": {"type": "array"},
+          "data": {"type": "object"}
+        }
+      }
+    }
+  ],
+  "usage_patterns": [
+    {
+      "name": "quick-context",
+      "description": "Get quick context for code-related queries",
+      "tools": ["exa-context"],
+      "example": "Get React hooks context with 3000 tokens"
+    },
+    {
+      "name": "semantic-search",
+      "description": "Perform semantic search with neural mode",
+      "tools": ["exa-search"],
+      "example": "Search for AI trends with neural mode, 20 results"
+    },
+    {
+      "name": "content-extraction",
+      "description": "Extract content with live crawl",
+      "tools": ["exa-contents"],
+      "example": "Extract content from URLs with live crawl and 5 subpages"
+    },
+    {
+      "name": "async-research",
+      "description": "Run async research with polling",
+      "tools": ["exa-research"],
+      "example": "Research latest ML trends with polling"
+    },
+    {
+      "name": "webset-workflow",
+      "description": "Create and manage websets for batch operations",
+      "tools": ["exa-websets", "exa-research"],
+      "example": "Create webset, search, enrich, and poll for results"
+    }
+  ],
+  "environment_requirements": {
+    "required": ["EXA_API_KEY"],
+    "optional": ["WEBHOOK_SECRET", "WEBHOOK_URL", "DEFAULT_TIMEOUT_MS", "MAX_RETRIES", "CONCURRENCY_LIMIT"]
+  },
+  "installation": {
+    "dependencies": ["bun", "typescript"],
+    "setup_commands": [
+      "bun install",
+      "bun run build"
+    ]
+  },
+  "testing": {
+    "test_command": "bun test-demo.js",
+    "validation": "CLI structure and help commands"
+  }
+}

@@ -1,0 +1,28 @@
+# Git filter-repo patterns to remove from history
+# Remove all .md files except README.md
+--path-glob '*.md'
+--path README.md
+--invert-paths
+
+# Remove instruction directories
+--path llm/
+--path instructions/
+--path prompts/
+--path docs/private/
+
+# Remove planning directories  
+--path plans/
+--path roadmap/
+--path roadmaps/
+
+# Remove test artifacts and legacy
+--path tests/legacy/
+--path tests/fixtures/large/
+--path debug-*.js
+--path demo-*.js
+--path test-*.js
+
+# Remove result files
+--path *-RESULTS.md
+--path *-REPORT.md
+--path *-SUMMARY.md
