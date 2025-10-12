@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import React from "react";
 import { Command } from "commander";
 
 import { loadEnv } from "./env";
@@ -35,7 +34,7 @@ const program = new Command();
 
 program
   .name("exaflow")
-  .description("ExaFlow: Interactive Semantic Search Tool with TUI and MCP Server Integration")
+  .description("ExaFlow: Advanced Semantic Search Tool with MCP Server Integration")
   .version("2.0.0");
 
 // Global options
@@ -45,30 +44,6 @@ program
   .option("--compact", "Output compact JSON instead of formatted", false)
   .option("--silent", "Suppress event streaming to stderr", false);
 
-// TUI command
-program
-  .command("tui")
-  .description("Launch interactive terminal user interface")
-  .action(async () => {
-    try {
-      // Import and run the TUI
-      const { render } = await import('ink');
-      const { App } = await import('./tui/components/App.tsx');
-      
-      const { waitUntilExit } = render(React.createElement(App));
-      
-      waitUntilExit().then(() => {
-        process.exit(0);
-      }).catch((error) => {
-        console.error('TUI error:', error);
-        process.exit(1);
-      });
-      
-    } catch (error) {
-      console.error('Failed to start TUI:', error instanceof Error ? error.message : String(error));
-      process.exit(1);
-    }
-  });
 
 // MCP Server command
 program

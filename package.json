@@ -1,7 +1,7 @@
 {
   "name": "exaflow",
   "version": "2.0.0",
-  "description": "ExaFlow: Interactive Semantic Search Tool with TUI and MCP Server Integration",
+  "description": "ExaFlow: Advanced Semantic Search Tool with MCP Server Integration",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
@@ -12,7 +12,6 @@
   "scripts": {
     "build": "bun build src/index.ts --outdir dist --target bun --minify && bun build src/cli.ts --outdir dist --target bun --minify && bun build src/mcp-server.ts --outdir dist --target bun --minify",
     "dev": "bunx tsx src/cli.ts",
-    "dev:tui": "bunx tsx src/tui/index.ts",
     "dev:mcp": "bunx tsx src/mcp-server.ts",
     "test": "bun test",
     "test:watch": "bun test --watch",
@@ -22,7 +21,6 @@
     "cleanup": "node scripts/cleanup.js",
     "cleanup:history": "node scripts/cleanup.js --history",
     "start": "bun run dist/cli.js",
-    "start:tui": "bun run dist/tui/index.js",
     "start:mcp": "bun run dist/mcp-server.js"
   },
   "devDependencies": {
@@ -34,12 +32,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
-    "blessed": "^0.1.81",
     "commander": "^14.0.1",
-    "ink": "^6.3.1",
-    "ink-text-input": "^6.0.0",
-    "react-blessed": "^0.7.2",
-    "react-devtools-core": "^7.0.0",
     "ws": "^8.18.3",
     "zod": "^4.1.12"
   },
@@ -48,14 +41,12 @@
     "exaflow",
     "search",
     "semantic",
-    "tui",
     "mcp",
     "context",
     "research",
     "websets",
     "cli",
-    "typescript",
-    "terminal"
+    "typescript"
   ],
   "author": "ExaFlow",
   "license": "MIT"

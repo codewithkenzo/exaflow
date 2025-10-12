@@ -252,8 +252,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
+    // Validate args exists
+    if (!args || typeof args !== 'object') {
+      throw new Error('Tool arguments are required');
+    }
+
     switch (name) {
       case 'exa_semantic_search': {
+        if (!args.query || typeof args.query !== 'string') {
+          throw new Error('query parameter is required and must be a string');
+        }
+        
         const result = await runSearchTask(args.query, {
           searchType: args.searchType || 'neural',
           numResults: args.numResults || 10,
@@ -276,6 +285,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'exa_research_discovery': {
+        if (!args.query || typeof args.query !== 'string') {
+          throw new Error('query parameter is required and must be a string');
+        }
+        
         const result = await runContextTask(args.query, {
           tokens: args.tokens || 5000,
           timeout: 30000,
@@ -294,6 +307,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'exa_professional_finder': {
+        if (!args.query || typeof args.query !== 'string') {
+          throw new Error('query parameter is required and must be a string');
+        }
+        
         let enhancedQuery = args.query;
         
         if (args.includeProfiles) {
@@ -363,7 +380,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'exa_knowledge_graph': {
         let enhancedQuery = args.query;
-        const sources = args.sources || ['wikipedia'];
+        const sources = Array.isArray(args.sources) ? args.sources : ['wikipedia'];
         
         if (sources.includes('wikipedia')) {
           enhancedQuery += ' site:wikipedia.org';
@@ -401,6 +418,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'exa_content_extract': {
+        if (!args.urls || !Array.isArray(args.urls)) {
+          throw new Error('urls parameter is required and must be an array');
+        }
+        
         const result = await runContentsTask(args.urls, {
           livecrawl: args.livecrawl || 'fallback',
           subpages: args.subpages || 0,

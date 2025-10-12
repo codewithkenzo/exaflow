@@ -49,6 +49,7 @@ export const ContextTaskSchema = z.object({
   type: z.literal("context"),
   query: z.string().min(1),
   tokensNum: z.number().int().min(100).max(50000).default(5000),
+  id: z.string().optional(),
 });
 
 export const SearchTaskSchema = z.object({
@@ -59,6 +60,7 @@ export const SearchTaskSchema = z.object({
   numResults: z.number().int().min(1).max(50).default(10),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
+  id: z.string().optional(),
 });
 
 export const ContentsTaskSchema = z.object({
@@ -67,6 +69,7 @@ export const ContentsTaskSchema = z.object({
   livecrawl: z.enum(["always", "fallback", "never"]).default("fallback"),
   subpages: z.number().int().min(0).max(20).default(0),
   subpageTarget: z.array(z.string()).default([]),
+  id: z.string().optional(),
 });
 
 export const WebsetTaskSchema = z.object({
@@ -76,6 +79,7 @@ export const WebsetTaskSchema = z.object({
   searchQuery: z.string().optional(),
   enrichmentType: z.string().optional(),
   useWebhook: z.boolean().default(false),
+  id: z.string().optional(),
 });
 
 export const ResearchTaskSchema = z.object({

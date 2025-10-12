@@ -4,9 +4,9 @@ const envSchema = z.object({
   EXA_API_KEY: z.string().min(1, "EXA_API_KEY is required"),
   WEBHOOK_SECRET: z.string().optional(),
   WEBHOOK_URL: z.string().url().optional(),
-  DEFAULT_TIMEOUT_MS: z.string().transform(Number).pipe(z.number().positive()).default("30000"),
-  MAX_RETRIES: z.string().transform(Number).pipe(z.number().int().min(0).max(10)).default("3"),
-  CONCURRENCY_LIMIT: z.string().transform(Number).pipe(z.number().int().min(1).max(20)).default("5"),
+  DEFAULT_TIMEOUT_MS: z.number().positive().default(30000),
+  MAX_RETRIES: z.number().int().min(0).max(10).default(3),
+  CONCURRENCY_LIMIT: z.number().int().min(1).max(20).default(5),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -26,7 +26,7 @@ export function loadEnv(): Env {
     
     if (fs.existsSync(envPath)) {
       const envContent = fs.readFileSync(envPath, 'utf8');
-      envContent.split('\n').forEach(line => {
+      envContent.split('\n').forEach((line: string) => {
         const trimmed = line.trim();
         if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
           const [key, ...values] = trimmed.split('=');
@@ -47,7 +47,7 @@ export function loadEnv(): Env {
     console.error('Environment validation failed:');
     console.error('Available env vars:', Object.keys(process.env).filter(k => k.includes('EXA')));
     console.error('Process env EXA_API_KEY:', process.env.EXA_API_KEY ? 'SET' : 'NOT SET');
-    const errors = result.error?.errors?.map(err => `${err.path.join('.')}: ${err.message}`).join(', ') || 'Unknown validation error';
+    const errors = result.error.issues.map((err: any) => `${err.path.join('.')}: ${err.message}`).join(', ') || 'Unknown validation error';
     throw new Error(`Environment validation failed: ${errors}`);
   }
 
