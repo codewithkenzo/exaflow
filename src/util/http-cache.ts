@@ -78,6 +78,24 @@ export class HttpCache {
   }
 
   /**
+   * Get cached data using a simple key (for testing)
+   */
+  getByKey(key: string): any | null {
+    if (!this.config.enabled) {
+      return null;
+    }
+
+    const entry = this.cache.get(key);
+
+    if (!entry || !this.isValid(entry)) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return entry.data;
+  }
+
+  /**
    * Store response in cache
    */
   set(url: string, data: any, requestData?: any, ttl?: number): void {
@@ -86,6 +104,31 @@ export class HttpCache {
     }
 
     const key = this.generateKey(url, requestData);
+
+    // Remove oldest entries if cache is full
+    if (this.cache.size >= this.config.maxSize) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey) {
+        this.cache.delete(oldestKey);
+      }
+    }
+
+    const entry: CacheEntry = {
+      data,
+      timestamp: Date.now(),
+      expiresAt: ttl ? Date.now() + ttl : Date.now() + this.config.defaultTtl,
+    };
+
+    this.cache.set(key, entry);
+  }
+
+  /**
+   * Store data in cache using a simple key (for testing)
+   */
+  setByKey(key: string, data: any, ttl?: number): void {
+    if (!this.config.enabled) {
+      return;
+    }
 
     // Remove oldest entries if cache is full
     if (this.cache.size >= this.config.maxSize) {
@@ -272,10 +315,7 @@ export class CachedHttpClient {
    */
   private isIdempotentRequest(url: string, data?: any): boolean {
     // Search and context requests are generally idempotent
-    const idempotentPatterns = [
-      '/search',
-      '/context',
-    ];
+    const idempotentPatterns = ['/search', '/context'];
 
     return idempotentPatterns.some(pattern => url.includes(pattern));
   }
@@ -314,6 +354,9 @@ export const cachedHttpClient = new CachedHttpClient();
 /**
  * Automatic cache cleanup interval (5 minutes)
  */
-setInterval(() => {
-  httpCache.cleanup();
-}, 5 * 60 * 1000);
+setInterval(
+  () => {
+    httpCache.cleanup();
+  },
+  5 * 60 * 1000
+);

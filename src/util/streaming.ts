@@ -1,4 +1,4 @@
-import type { EventEnvelope } from "../schema";
+import type { EventEnvelope } from '../schema';
 
 export class EventStreamer {
   private taskId: string;
@@ -8,7 +8,7 @@ export class EventStreamer {
   }
 
   private createEvent(
-    level: EventEnvelope["level"],
+    level: EventEnvelope['level'],
     type: string,
     message: string,
     meta?: Record<string, any>
@@ -34,22 +34,22 @@ export class EventStreamer {
   }
 
   debug(message: string, meta?: Record<string, any>): void {
-    const event = this.createEvent("debug", "debug", message, meta);
+    const event = this.createEvent('debug', 'debug', message, meta);
     this.sendEvent(event);
   }
 
   info(message: string, meta?: Record<string, any>): void {
-    const event = this.createEvent("info", "info", message, meta);
+    const event = this.createEvent('info', 'info', message, meta);
     this.sendEvent(event);
   }
 
   warn(message: string, meta?: Record<string, any>): void {
-    const event = this.createEvent("warn", "warn", message, meta);
+    const event = this.createEvent('warn', 'warn', message, meta);
     this.sendEvent(event);
   }
 
   error(message: string, meta?: Record<string, any>): void {
-    const event = this.createEvent("error", "error", message, meta);
+    const event = this.createEvent('error', 'error', message, meta);
     this.sendEvent(event);
   }
 
@@ -69,7 +69,7 @@ export class EventStreamer {
   failed(error: Error | string, meta?: Record<string, any>): void {
     const errorMessage = error instanceof Error ? error.message : error;
     const errorStack = error instanceof Error ? error.stack : undefined;
-    
+
     this.error(`Task failed: ${errorMessage}`, {
       errorMessage,
       errorStack,
@@ -91,7 +91,13 @@ export class EventStreamer {
     this.debug(`API request: ${method} ${url}`, { method, url, ...meta });
   }
 
-  apiResponse(method: string, url: string, status: number, duration: number, meta?: Record<string, any>): void {
+  apiResponse(
+    method: string,
+    url: string,
+    status: number,
+    duration: number,
+    meta?: Record<string, any>
+  ): void {
     this.debug(`API response: ${method} ${url} (${status})`, {
       method,
       url,
@@ -110,7 +116,12 @@ export class EventStreamer {
     });
   }
 
-  asyncPolling(operation: string, attempt: number, status?: string, meta?: Record<string, any>): void {
+  asyncPolling(
+    operation: string,
+    attempt: number,
+    status?: string,
+    meta?: Record<string, any>
+  ): void {
     this.info(`Polling async operation: ${operation} (attempt ${attempt})`, {
       operation,
       attempt,
@@ -145,8 +156,11 @@ export class EventStreamer {
   }
 
   // Concurrency events
-  concurrencyUpdate(stats: { running: number; queued: number; completed: number }, meta?: Record<string, any>): void {
-    this.debug("Concurrency stats updated", { stats, ...meta });
+  concurrencyUpdate(
+    stats: { running: number; queued: number; completed: number },
+    meta?: Record<string, any>
+  ): void {
+    this.debug('Concurrency stats updated', { stats, ...meta });
   }
 
   batchStarted(totalTasks: number, concurrency: number, meta?: Record<string, any>): void {
@@ -176,7 +190,7 @@ export function createEventStreamer(taskId: string): EventStreamer {
 }
 
 // Global event streamer for operations without specific task ID
-export const globalEventStreamer = new EventStreamer("global");
+export const globalEventStreamer = new EventStreamer('global');
 
 // Utility function to stream results to stdout
 export function streamResult<T>(result: T): void {

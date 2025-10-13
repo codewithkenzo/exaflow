@@ -1,6 +1,14 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, realpathSync, statSync } from "fs";
-import { join, dirname, resolve, sep } from "path";
-import { z } from "zod";
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+} from 'fs';
+import { join, dirname, resolve, sep } from 'path';
+import { z } from 'zod';
 
 export interface FileReadOptions {
   encoding?: BufferEncoding;
@@ -26,7 +34,7 @@ export class FileSystemError extends Error {
     public path?: string
   ) {
     super(message);
-    this.name = "FileSystemError";
+    this.name = 'FileSystemError';
   }
 }
 
@@ -42,20 +50,12 @@ export class SandboxedFileSystem {
   private validatePath(path: string): string {
     // Reject obvious traversal attempts
     if (path.includes('..') || path.includes('~')) {
-      throw new FileSystemError(
-        `Path traversal detected in ${path}`,
-        "PATH_TRAVERSAL",
-        path
-      );
+      throw new FileSystemError(`Path traversal detected in ${path}`, 'PATH_TRAVERSAL', path);
     }
 
     // Reject null bytes and control characters
     if (path.includes('\0') || /[\x00-\x1F\x7F]/.test(path)) {
-      throw new FileSystemError(
-        `Invalid characters in path ${path}`,
-        "INVALID_PATH",
-        path
-      );
+      throw new FileSystemError(`Invalid characters in path ${path}`, 'INVALID_PATH', path);
     }
 
     const resolvedPath = resolve(path);
@@ -81,7 +81,7 @@ export class SandboxedFileSystem {
           // If we can't resolve real path, err on side of caution
           throw new FileSystemError(
             `Cannot verify path safety: ${path}`,
-            "PATH_VERIFICATION_FAILED",
+            'PATH_VERIFICATION_FAILED',
             path
           );
         }
@@ -90,33 +90,26 @@ export class SandboxedFileSystem {
 
     throw new FileSystemError(
       `Path ${path} is outside allowed workspace boundaries`,
-      "PATH_VIOLATION",
+      'PATH_VIOLATION',
       path
     );
   }
 
-  async readFile(
-    path: string,
-    options: FileReadOptions = {}
-  ): Promise<string> {
+  async readFile(path: string, options: FileReadOptions = {}): Promise<string> {
     const validatedPath = this.validatePath(path);
-    const { encoding = "utf8", maxSize = this.maxFileSize } = options;
+    const { encoding = 'utf8', maxSize = this.maxFileSize } = options;
 
     try {
       const stats = await this.getFileInfo(validatedPath);
-      
+
       if (stats.isDirectory) {
-        throw new FileSystemError(
-          "Cannot read directory as file",
-          "IS_DIRECTORY",
-          path
-        );
+        throw new FileSystemError('Cannot read directory as file', 'IS_DIRECTORY', path);
       }
 
       if (stats.size > maxSize) {
         throw new FileSystemError(
           `File size ${stats.size} exceeds maximum allowed size ${maxSize}`,
-          "FILE_TOO_LARGE",
+          'FILE_TOO_LARGE',
           path
         );
       }
@@ -126,22 +119,18 @@ export class SandboxedFileSystem {
       if (error instanceof FileSystemError) {
         throw error;
       }
-      
+
       throw new FileSystemError(
         `Failed to read file: ${error instanceof Error ? error.message : String(error)}`,
-        "READ_ERROR",
+        'READ_ERROR',
         path
       );
     }
   }
 
-  async writeFile(
-    path: string,
-    content: string,
-    options: FileWriteOptions = {}
-  ): Promise<void> {
+  async writeFile(path: string, content: string, options: FileWriteOptions = {}): Promise<void> {
     const validatedPath = this.validatePath(path);
-    const { encoding = "utf8", createDir = true } = options;
+    const { encoding = 'utf8', createDir = true } = options;
 
     try {
       // Create directory if it doesn't exist
@@ -157,7 +146,7 @@ export class SandboxedFileSystem {
       if (contentSize > this.maxFileSize) {
         throw new FileSystemError(
           `Content size ${contentSize} exceeds maximum allowed size ${this.maxFileSize}`,
-          "CONTENT_TOO_LARGE",
+          'CONTENT_TOO_LARGE',
           path
         );
       }
@@ -167,10 +156,10 @@ export class SandboxedFileSystem {
       if (error instanceof FileSystemError) {
         throw error;
       }
-      
+
       throw new FileSystemError(
         `Failed to write file: ${error instanceof Error ? error.message : String(error)}`,
-        "WRITE_ERROR",
+        'WRITE_ERROR',
         path
       );
     }
@@ -191,7 +180,7 @@ export class SandboxedFileSystem {
     } catch (error) {
       throw new FileSystemError(
         `Failed to get file info: ${error instanceof Error ? error.message : String(error)}`,
-        "STAT_ERROR",
+        'STAT_ERROR',
         path
       );
     }
@@ -202,11 +191,7 @@ export class SandboxedFileSystem {
 
     try {
       if (!existsSync(validatedPath)) {
-        throw new FileSystemError(
-          "Directory does not exist",
-          "DIRECTORY_NOT_FOUND",
-          dir
-        );
+        throw new FileSystemError('Directory does not exist', 'DIRECTORY_NOT_FOUND', dir);
       }
 
       return readdirSync(validatedPath);
@@ -214,10 +199,10 @@ export class SandboxedFileSystem {
       if (error instanceof FileSystemError) {
         throw error;
       }
-      
+
       throw new FileSystemError(
         `Failed to list directory: ${error instanceof Error ? error.message : String(error)}`,
-        "LIST_ERROR",
+        'LIST_ERROR',
         dir
       );
     }
@@ -238,11 +223,15 @@ export class SandboxedFileSystem {
 
     try {
       // Secure JSON parsing to prevent prototype pollution
-      if (content.trim().startsWith('__proto__') || content.includes('"__proto__"') ||
-          content.includes('"constructor"') || content.includes('"prototype"')) {
+      if (
+        content.trim().startsWith('__proto__') ||
+        content.includes('"__proto__"') ||
+        content.includes('"constructor"') ||
+        content.includes('"prototype"')
+      ) {
         throw new FileSystemError(
           'JSON contains potentially dangerous prototype pollution properties',
-          "PROTO_POLLUTION_DETECTED",
+          'PROTO_POLLUTION_DETECTED',
           path
         );
       }
@@ -254,7 +243,7 @@ export class SandboxedFileSystem {
         if (!result.success) {
           throw new FileSystemError(
             `JSON schema validation failed: ${result.error.message}`,
-            "SCHEMA_VALIDATION_ERROR",
+            'SCHEMA_VALIDATION_ERROR',
             path
           );
         }
@@ -269,7 +258,7 @@ export class SandboxedFileSystem {
 
       throw new FileSystemError(
         `Failed to parse JSON: ${error instanceof Error ? error.message : String(error)}`,
-        "JSON_PARSE_ERROR",
+        'JSON_PARSE_ERROR',
         path
       );
     }
@@ -277,19 +266,17 @@ export class SandboxedFileSystem {
 
   async writeJson<T>(path: string, data: T, pretty = true): Promise<void> {
     try {
-      const content = pretty 
-        ? JSON.stringify(data, null, 2)
-        : JSON.stringify(data);
-      
+      const content = pretty ? JSON.stringify(data, null, 2) : JSON.stringify(data);
+
       await this.writeFile(path, content);
     } catch (error) {
       if (error instanceof FileSystemError) {
         throw error;
       }
-      
+
       throw new FileSystemError(
         `Failed to serialize JSON: ${error instanceof Error ? error.message : String(error)}`,
-        "JSON_SERIALIZE_ERROR",
+        'JSON_SERIALIZE_ERROR',
         path
       );
     }
@@ -311,23 +298,23 @@ export const fs = new SandboxedFileSystem();
 // Utility functions for common operations
 export async function readInputFile(path: string): Promise<any[]> {
   const content = await fs.readFile(path);
-  
+
   try {
     const parsed = JSON.parse(content);
-    
+
     if (Array.isArray(parsed)) {
       return parsed;
     }
-    
+
     if (parsed.tasks && Array.isArray(parsed.tasks)) {
       return parsed.tasks;
     }
-    
+
     throw new Error("Input file must contain an array or object with 'tasks' array");
   } catch (error) {
     throw new FileSystemError(
       `Invalid input file format: ${error instanceof Error ? error.message : String(error)}`,
-      "INVALID_INPUT_FORMAT",
+      'INVALID_INPUT_FORMAT',
       path
     );
   }
@@ -335,22 +322,19 @@ export async function readInputFile(path: string): Promise<any[]> {
 
 export async function readStdin(): Promise<string> {
   return new Promise((resolve, reject) => {
-    let data = "";
-    
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", chunk => {
+    let data = '';
+
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', chunk => {
       data += chunk;
     });
-    
-    process.stdin.on("end", () => {
+
+    process.stdin.on('end', () => {
       resolve(data);
     });
-    
-    process.stdin.on("error", error => {
-      reject(new FileSystemError(
-        `Failed to read stdin: ${error.message}`,
-        "STDIN_ERROR"
-      ));
+
+    process.stdin.on('error', error => {
+      reject(new FileSystemError(`Failed to read stdin: ${error.message}`, 'STDIN_ERROR'));
     });
   });
 }
@@ -362,18 +346,22 @@ export async function readStdinJson(): Promise<any[]> {
     return [];
   }
 
-  const lines = content.trim().split("\n");
+  const lines = content.trim().split('\n');
   const results: any[] = [];
 
   for (const line of lines) {
     if (line.trim()) {
       try {
         // Secure JSON parsing to prevent prototype pollution
-        if (line.trim().startsWith('__proto__') || line.includes('"__proto__"') ||
-            line.includes('"constructor"') || line.includes('"prototype"')) {
+        if (
+          line.trim().startsWith('__proto__') ||
+          line.includes('"__proto__"') ||
+          line.includes('"constructor"') ||
+          line.includes('"prototype"')
+        ) {
           throw new FileSystemError(
             'JSON line contains potentially dangerous prototype pollution properties',
-            "PROTO_POLLUTION_DETECTED"
+            'PROTO_POLLUTION_DETECTED'
           );
         }
 
@@ -385,7 +373,7 @@ export async function readStdinJson(): Promise<any[]> {
         }
         throw new FileSystemError(
           `Invalid JSON line in stdin: ${line.substring(0, 100)}${line.length > 100 ? '...' : ''}`,
-          "STDIN_JSON_ERROR"
+          'STDIN_JSON_ERROR'
         );
       }
     }

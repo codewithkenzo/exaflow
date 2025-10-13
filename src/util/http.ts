@@ -12,9 +12,9 @@ export interface CircuitBreakerOptions {
 }
 
 export enum CircuitBreakerState {
-  CLOSED = "closed",
-  OPEN = "open",
-  HALF_OPEN = "half_open",
+  CLOSED = 'closed',
+  OPEN = 'open',
+  HALF_OPEN = 'half_open',
 }
 
 export class CircuitBreaker {
@@ -28,7 +28,7 @@ export class CircuitBreaker {
   async execute<T>(fn: () => Promise<T>): Promise<T> {
     if (this.state === CircuitBreakerState.OPEN) {
       if (Date.now() - this.lastFailureTime < this.options.resetTimeout) {
-        throw new Error("Circuit breaker is OPEN");
+        throw new Error('Circuit breaker is OPEN');
       }
       this.state = CircuitBreakerState.HALF_OPEN;
       this.successCount = 0;
@@ -46,10 +46,11 @@ export class CircuitBreaker {
 
   private onSuccess(): void {
     this.failureCount = 0;
-    
+
     if (this.state === CircuitBreakerState.HALF_OPEN) {
       this.successCount++;
-      if (this.successCount >= 3) { // Need 3 successes to close
+      if (this.successCount >= 3) {
+        // Need 3 successes to close
         this.state = CircuitBreakerState.CLOSED;
       }
     }
@@ -95,21 +96,14 @@ export class HttpClient {
     url: string,
     options: HttpOptions & { body?: string; method?: string } = {}
   ): Promise<Response> {
-    const {
-      timeout = 30000,
-      retries = 3,
-      headers = {},
-      body,
-      method = "GET",
-      signal,
-    } = options;
+    const { timeout = 30000, retries = 3, headers = {}, body, method = 'GET', signal } = options;
 
     return this.circuitBreaker.execute(async () => {
       let lastError: Error | null = null;
 
       for (let attempt = 0; attempt <= retries; attempt++) {
         const controller = new AbortController();
-        
+
         // Set up timeout
         const timeoutId = setTimeout(() => {
           controller.abort();
@@ -117,7 +111,7 @@ export class HttpClient {
 
         // Chain external signal if provided
         if (signal) {
-          signal.addEventListener("abort", () => {
+          signal.addEventListener('abort', () => {
             controller.abort();
           });
         }
@@ -126,8 +120,8 @@ export class HttpClient {
           const response = await fetch(url, {
             method,
             headers: {
-              "Content-Type": "application/json",
-              "User-Agent": "exa-personal-tool/1.0.0",
+              'Content-Type': 'application/json',
+              'User-Agent': 'exa-personal-tool/1.0.0',
               ...headers,
             },
             body,
@@ -150,24 +144,20 @@ export class HttpClient {
             const baseDelay = Math.pow(2, attempt) * 1000;
             const jitter = Math.random() * 1000;
             const delay = baseDelay + jitter;
-            
+
             await new Promise(resolve => setTimeout(resolve, delay));
           }
         }
       }
 
-      throw lastError || new Error("Unknown error occurred");
+      throw lastError || new Error('Unknown error occurred');
     });
   }
 
-  async post<T = any>(
-    url: string,
-    data: any,
-    options: HttpOptions = {}
-  ): Promise<T> {
+  async post<T = any>(url: string, data: any, options: HttpOptions = {}): Promise<T> {
     const response = await this.fetch(url, {
       ...options,
-      method: "POST",
+      method: 'POST',
       body: JSON.stringify(data),
     });
 
@@ -177,7 +167,7 @@ export class HttpClient {
   async get<T = any>(url: string, options: HttpOptions = {}): Promise<T> {
     const response = await this.fetch(url, {
       ...options,
-      method: "GET",
+      method: 'GET',
     });
 
     return response.json() as Promise<T>;
@@ -201,14 +191,14 @@ export class RateLimiter {
 
   async acquire(): Promise<void> {
     const now = Date.now();
-    
+
     // Remove old requests outside the window
     this.requests = this.requests.filter(time => now - time < this.windowMs);
 
     if (this.requests.length >= this.maxRequests) {
       const oldestRequest = Math.min(...this.requests);
       const waitTime = this.windowMs - (now - oldestRequest);
-      
+
       if (waitTime > 0) {
         await new Promise(resolve => setTimeout(resolve, waitTime));
       }
@@ -220,7 +210,7 @@ export class RateLimiter {
   getStats(): { currentRequests: number; maxRequests: number; windowMs: number } {
     const now = Date.now();
     const currentRequests = this.requests.filter(time => now - time < this.windowMs).length;
-    
+
     return {
       currentRequests,
       maxRequests: this.maxRequests,

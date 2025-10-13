@@ -1,4 +1,4 @@
-import type { EnhancedTask } from "../schema";
+import type { EnhancedTask } from '../schema';
 
 export interface ConcurrencyResult<T> {
   task: EnhancedTask;
@@ -56,9 +56,7 @@ export class ConcurrencyPool<T> {
     return allResults;
   }
 
-  private async processQueue(
-    executor: (task: EnhancedTask) => Promise<T>
-  ): Promise<void> {
+  private async processQueue(executor: (task: EnhancedTask) => Promise<T>): Promise<void> {
     if (this.running >= this.maxConcurrency || this.queue.length === 0) {
       return;
     }
@@ -147,7 +145,7 @@ export async function executeWithOrdering<T>(
       await Promise.race(executing);
       // Remove completed promises
       for (let j = executing.length - 1; j >= 0; j--) {
-        if (await Promise.race([executing[j], Promise.resolve("completed")])) {
+        if (await Promise.race([executing[j], Promise.resolve('completed')])) {
           executing.splice(j, 1);
         }
       }

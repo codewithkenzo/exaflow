@@ -1,50 +1,50 @@
-import { EnhancedTask, ResultEnvelope } from "./schema";
-import { executeWithOrdering } from "./util/concurrency";
-import { createEventStreamer, streamResult } from "./util/streaming";
-import { loadEnv } from "./env";
-import { exaContextClient } from "./clients/exa-context";
-import { exaSearchClient } from "./clients/exa-search";
-import { exaContentsClient } from "./clients/exa-contents";
-import { exaWebsetsClient } from "./clients/exa-websets";
-import { exaResearchClient } from "./clients/exa-research";
+import { EnhancedTask, ResultEnvelope } from './schema';
+import { executeWithOrdering } from './util/concurrency';
+import { createEventStreamer, streamResult } from './util/streaming';
+import { loadEnv } from './env';
+import { exaContextClient } from './clients/exa-context';
+import { exaSearchClient } from './clients/exa-search';
+import { exaContentsClient } from './clients/exa-contents';
+import { exaWebsetsClient } from './clients/exa-websets';
+import { exaResearchClient } from './clients/exa-research';
 
 // Load environment
 loadEnv();
 
 export async function runTask(task: EnhancedTask): Promise<ResultEnvelope> {
   const streamer = createEventStreamer(task.id || `task-${Date.now()}`);
-  
-  streamer.started(task.type, { 
-    timeout: task.timeout, 
-    retries: task.retries 
+
+  streamer.started(task.type, {
+    timeout: task.timeout,
+    retries: task.retries,
   });
 
   try {
     switch (task.type) {
-      case "context":
+      case 'context':
         return await exaContextClient.executeTask(task);
-      
-      case "search":
+
+      case 'search':
         return await exaSearchClient.executeTask(task);
-      
-      case "contents":
+
+      case 'contents':
         return await exaContentsClient.executeTask(task);
-      
-      case "websets":
+
+      case 'websets':
         return await exaWebsetsClient.executeTask(task);
-      
-      case "research":
+
+      case 'research':
         return await exaResearchClient.executeTask(task);
-      
+
       default:
         throw new Error(`Unknown task type: ${(task as any).type}`);
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     streamer.failed(errorMessage);
-    
+
     return {
-      status: "error",
+      status: 'error',
       taskId: task.id || `task-${Date.now()}`,
       timing: {
         startedAt: new Date().toISOString(),
@@ -54,7 +54,7 @@ export async function runTask(task: EnhancedTask): Promise<ResultEnvelope> {
       citations: [],
       data: null,
       error: {
-        code: "TASK_EXECUTION_ERROR",
+        code: 'TASK_EXECUTION_ERROR',
         message: errorMessage,
       },
     };
@@ -78,15 +78,15 @@ export async function runBatch(
         streamer.info(`Starting task: ${task.type}`, { taskId: task.id });
         const result = await runTask(task);
 
-        if (result.status === "success") {
+        if (result.status === 'success') {
           streamer.info(`Completed task: ${task.type}`, {
             taskId: task.id,
-            citationsCount: result.citations.length
+            citationsCount: result.citations.length,
           });
         } else {
           streamer.warn(`Failed task: ${task.type}`, {
             taskId: task.id,
-            error: result.error?.message
+            error: result.error?.message,
           });
         }
 
@@ -98,8 +98,8 @@ export async function runBatch(
     // Extract the ResultEnvelope objects from ConcurrencyResult
     const results = concurrencyResults.map(cr => cr.result);
     const duration = Date.now() - startTime;
-    const successCount = results.filter(r => r.status === "success").length;
-    const errorCount = results.filter(r => r.status === "error").length;
+    const successCount = results.filter(r => r.status === 'success').length;
+    const errorCount = results.filter(r => r.status === 'error').length;
 
     streamer.batchCompleted(tasks.length, duration, {
       successCount,
@@ -107,16 +107,15 @@ export async function runBatch(
     });
 
     return results;
-
   } catch (error) {
     const duration = Date.now() - startTime;
     const errorMessage = error instanceof Error ? error.message : String(error);
-    
+
     streamer.failed(`Batch execution failed: ${errorMessage}`, { duration });
 
     // Return error results for all tasks
     return tasks.map(task => ({
-      status: "error" as const,
+      status: 'error' as const,
       taskId: task.id || `task-${Date.now()}`,
       timing: {
         startedAt: new Date(startTime).toISOString(),
@@ -126,7 +125,7 @@ export async function runBatch(
       citations: [],
       data: null,
       error: {
-        code: "BATCH_EXECUTION_ERROR",
+        code: 'BATCH_EXECUTION_ERROR',
         message: errorMessage,
       },
     }));
@@ -144,7 +143,7 @@ export async function runContextTask(
   } = {}
 ): Promise<ResultEnvelope> {
   const task: EnhancedTask = {
-    type: "context",
+    type: 'context',
     query,
     tokensNum: options.tokens || 5000,
     timeout: options.timeout || 30000,
@@ -158,7 +157,7 @@ export async function runContextTask(
 export async function runSearchTask(
   query: string,
   options: {
-    searchType?: "auto" | "keyword" | "neural" | "fast";
+    searchType?: 'auto' | 'keyword' | 'neural' | 'fast';
     numResults?: number;
     includeContents?: boolean;
     startDate?: string;
@@ -169,9 +168,9 @@ export async function runSearchTask(
   } = {}
 ): Promise<ResultEnvelope> {
   const task: EnhancedTask = {
-    type: "search",
+    type: 'search',
     query,
-    searchType: options.searchType || "auto",
+    searchType: options.searchType || 'auto',
     numResults: options.numResults || 10,
     includeContents: options.includeContents || false,
     startDate: options.startDate,
@@ -187,7 +186,7 @@ export async function runSearchTask(
 export async function runContentsTask(
   urls: string[],
   options: {
-    livecrawl?: "always" | "fallback" | "never";
+    livecrawl?: 'always' | 'fallback' | 'never';
     subpages?: number;
     subpageTarget?: string[];
     timeout?: number;
@@ -196,9 +195,9 @@ export async function runContentsTask(
   } = {}
 ): Promise<ResultEnvelope> {
   const task: EnhancedTask = {
-    type: "contents",
+    type: 'contents',
     ids: urls,
-    livecrawl: options.livecrawl || "fallback",
+    livecrawl: options.livecrawl || 'fallback',
     subpages: options.subpages || 0,
     subpageTarget: options.subpageTarget || [],
     timeout: options.timeout || 60000, // Contents may take longer
@@ -210,7 +209,7 @@ export async function runContentsTask(
 }
 
 export async function runWebsetTask(
-  operation: "create" | "search" | "poll" | "enrich",
+  operation: 'create' | 'search' | 'poll' | 'enrich',
   options: {
     websetId?: string;
     searchQuery?: string;
@@ -222,7 +221,7 @@ export async function runWebsetTask(
   } = {}
 ): Promise<ResultEnvelope> {
   const task: EnhancedTask = {
-    type: "websets",
+    type: 'websets',
     operation,
     websetId: options.websetId,
     searchQuery: options.searchQuery,
@@ -237,10 +236,10 @@ export async function runWebsetTask(
 }
 
 export async function runResearchTask(
-  operation: "create" | "get" | "list",
+  operation: 'create' | 'get' | 'list',
   options: {
     instructions?: string;
-    model?: "exa-research" | "exa-research-pro";
+    model?: 'exa-research' | 'exa-research-pro';
     outputSchema?: Record<string, any>;
     taskId?: string;
     poll?: boolean;
@@ -249,10 +248,10 @@ export async function runResearchTask(
   } = {}
 ): Promise<ResultEnvelope> {
   const task: EnhancedTask = {
-    type: "research",
+    type: 'research',
     operation,
     instructions: options.instructions,
-    model: options.model || "exa-research",
+    model: options.model || 'exa-research',
     outputSchema: options.outputSchema,
     taskId: options.taskId,
     timeout: options.timeout || 600000, // Research can be very long
@@ -273,15 +272,7 @@ export {
 };
 
 // Export utilities
-export {
-  createEventStreamer,
-  streamResult,
-  loadEnv,
-};
+export { createEventStreamer, streamResult, loadEnv };
 
 // Export types
-export type {
-  EnhancedTask,
-  ResultEnvelope,
-  EventEnvelope,
-} from "./schema";
+export type { EnhancedTask, ResultEnvelope, EventEnvelope } from './schema';

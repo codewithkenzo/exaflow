@@ -1,7 +1,7 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 const envSchema = z.object({
-  EXA_API_KEY: z.string().min(1, "EXA_API_KEY is required"),
+  EXA_API_KEY: z.string().min(1, 'EXA_API_KEY is required'),
   WEBHOOK_SECRET: z.string().optional(),
   WEBHOOK_URL: z.string().url().optional(),
   DEFAULT_TIMEOUT_MS: z.number().positive().default(30000),
@@ -23,7 +23,7 @@ export function loadEnv(): Env {
     const fs = require('fs');
     const path = require('path');
     const envPath = path.join(process.cwd(), '.env');
-    
+
     if (fs.existsSync(envPath)) {
       const envContent = fs.readFileSync(envPath, 'utf8');
       envContent.split('\n').forEach((line: string) => {
@@ -42,10 +42,12 @@ export function loadEnv(): Env {
   }
 
   const result = envSchema.safeParse(process.env);
-  
+
   if (!result.success) {
     // Secure logging - don't expose sensitive environment variables
-    const errors = result.error.issues.map((err: any) => `${err.path.join('.')}: ${err.message}`).join(', ') || 'Unknown validation error';
+    const errors =
+      result.error.issues.map((err: any) => `${err.path.join('.')}: ${err.message}`).join(', ') ||
+      'Unknown validation error';
 
     // Log validation errors without exposing sensitive data
     if (process.env.NODE_ENV === 'development') {
@@ -67,7 +69,7 @@ export function loadEnv(): Env {
 
 export function getEnv(): Env {
   if (!cachedEnv) {
-    throw new Error("Environment not loaded. Call loadEnv() first.");
+    throw new Error('Environment not loaded. Call loadEnv() first.');
   }
   return cachedEnv;
 }

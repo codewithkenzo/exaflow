@@ -1,9 +1,9 @@
-import { z } from "zod";
-import { httpClient } from "../util/http";
-import { cachedHttpClient } from "../util/http-cache";
-import { createEventStreamer, EventStreamer } from "../util/streaming";
-import type { ResultEnvelope, CitationSchema } from "../schema";
-import { getEnv } from "../env";
+import { z } from 'zod';
+import { httpClient } from '../util/http';
+import { cachedHttpClient } from '../util/http-cache';
+import { createEventStreamer, EventStreamer } from '../util/streaming';
+import type { ResultEnvelope, CitationSchema } from '../schema';
+import { getEnv } from '../env';
 
 /**
  * Configuration options for API requests
@@ -23,7 +23,7 @@ export interface ApiRequestOptions {
  */
 export abstract class BaseExaClient {
   protected readonly apiKey?: string;
-  protected readonly baseUrl = "https://api.exa.ai";
+  protected readonly baseUrl = 'https://api.exa.ai';
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey;
@@ -34,6 +34,17 @@ export abstract class BaseExaClient {
    */
   protected getApiKey(): string {
     return this.apiKey || getEnv().EXA_API_KEY;
+  }
+
+  /**
+   * Check if API key is available
+   */
+  protected hasApiKey(): boolean {
+    try {
+      return !!this.getApiKey();
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -51,9 +62,7 @@ export abstract class BaseExaClient {
    * Create an event streamer with the given task ID
    */
   protected createStreamer(taskId?: string, clientName?: string): EventStreamer {
-    const defaultTaskId = clientName
-      ? `${clientName}-${Date.now()}`
-      : `task-${Date.now()}`;
+    const defaultTaskId = clientName ? `${clientName}-${Date.now()}` : `task-${Date.now()}`;
     return createEventStreamer(taskId || defaultTaskId);
   }
 
@@ -61,7 +70,7 @@ export abstract class BaseExaClient {
    * Create a result envelope with the given data and metadata
    */
   protected createResultEnvelope<T>(
-    status: "success" | "partial" | "error",
+    status: 'success' | 'partial' | 'error',
     taskId: string,
     startTime: number,
     citations: z.infer<typeof CitationSchema>[] = [],
@@ -95,25 +104,18 @@ export abstract class BaseExaClient {
     fallbackData: T,
     errorDetails?: Record<string, unknown>
   ): ResultEnvelope<T> {
-    return this.createResultEnvelope(
-      "error",
-      taskId,
-      startTime,
-      [],
-      fallbackData,
-      {
-        code: errorCode,
-        message: errorMessage,
-        details: errorDetails,
-      }
-    );
+    return this.createResultEnvelope('error', taskId, startTime, [], fallbackData, {
+      code: errorCode,
+      message: errorMessage,
+      details: errorDetails,
+    });
   }
 
   /**
    * Execute an API request with common error handling and streaming
    */
   protected async executeRequest<TRequest, TResponse, TValidated>(
-    method: "GET" | "POST",
+    method: 'GET' | 'POST',
     endpoint: string,
     requestData: TRequest | null,
     validationSchema: z.ZodSchema<TValidated>,
@@ -140,7 +142,7 @@ export abstract class BaseExaClient {
 
       const requestConfig = {
         headers: {
-          "Authorization": `Bearer ${this.getApiKey()}`,
+          Authorization: `Bearer ${this.getApiKey()}`,
           ...options?.headers,
         },
         timeout: options?.timeout,
@@ -151,7 +153,7 @@ export abstract class BaseExaClient {
       // Choose HTTP client based on cache preference
       const client = options?.useCache !== false ? cachedHttpClient : httpClient;
 
-      if (method === "POST" && requestData) {
+      if (method === 'POST' && requestData) {
         response = await client.post(`${this.baseUrl}${endpoint}`, requestData, requestConfig);
       } else {
         response = await client.get(`${this.baseUrl}${endpoint}`, requestConfig);
@@ -165,14 +167,7 @@ export abstract class BaseExaClient {
       const validatedResponse = validationSchema.parse(response);
 
       // Return success result
-      return this.createResultEnvelope(
-        "success",
-        taskId,
-        startTime,
-        [],
-        validatedResponse
-      );
-
+      return this.createResultEnvelope('success', taskId, startTime, [], validatedResponse);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const duration = Date.now() - startTime;
@@ -207,7 +202,7 @@ export abstract class BaseExaClient {
     startTime: number,
     maxWaitTime: number = 300000,
     pollInterval: number = 5000,
-    operationName: string = "operation"
+    operationName: string = 'operation'
   ): Promise<ResultEnvelope<T>> {
     let attempts = 0;
 
@@ -240,18 +235,11 @@ export abstract class BaseExaClient {
 
           streamer.asyncCompleted(operationName, { attempts });
 
-          return this.createResultEnvelope(
-            "success",
-            taskId,
-            startTime,
-            [],
-            result.data
-          );
+          return this.createResultEnvelope('success', taskId, startTime, [], result.data);
         }
 
         // Wait before next poll
         await new Promise(resolve => setTimeout(resolve, pollInterval));
-
       } catch (error) {
         const duration = Date.now() - startTime;
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -294,7 +282,7 @@ export abstract class BaseExaClient {
    * Get a default task ID if none provided
    */
   protected getTaskId(taskId?: string, prefix?: string): string {
-    return taskId || `${prefix || "task"}-${Date.now()}`;
+    return taskId || `${prefix || 'task'}-${Date.now()}`;
   }
 
   /**

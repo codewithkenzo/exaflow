@@ -1,14 +1,14 @@
-import { z } from "zod";
-import { httpClient } from "../util/http";
-import { createEventStreamer } from "../util/streaming";
-import type { ResultEnvelope } from "../schema";
-import { ResearchTaskSchema } from "../schema";
-import { getEnv } from "../env";
+import { z } from 'zod';
+import { httpClient } from '../util/http';
+import { createEventStreamer } from '../util/streaming';
+import type { ResultEnvelope } from '../schema';
+import { ResearchTaskSchema } from '../schema';
+import { getEnv } from '../env';
 
 // Research API schemas
 const CreateResearchTaskRequestSchema = z.object({
   instructions: z.string().min(1),
-  model: z.enum(["exa-research", "exa-research-pro"]).default("exa-research"),
+  model: z.enum(['exa-research', 'exa-research-pro']).default('exa-research'),
   outputSchema: z.record(z.any()).optional(),
   webhookUrl: z.string().url().optional(),
 });
@@ -17,7 +17,7 @@ const ResearchTaskResponseSchema = z.object({
   id: z.string(),
   instructions: z.string(),
   model: z.string(),
-  status: z.enum(["pending", "running", "completed", "failed"]),
+  status: z.enum(['pending', 'running', 'completed', 'failed']),
   createdAt: z.string().datetime(),
   startedAt: z.string().datetime().optional(),
   completedAt: z.string().datetime().optional(),
@@ -35,22 +35,28 @@ const ResearchTaskListResponseSchema = z.object({
 
 const ResearchResultSchema = z.object({
   taskId: z.string(),
-  status: z.enum(["completed", "failed"]),
+  status: z.enum(['completed', 'failed']),
   result: z.any().optional(),
   error: z.string().optional(),
-  citations: z.array(z.object({
-    url: z.string().url(),
-    title: z.string(),
-    snippet: z.string().optional(),
-    publishedDate: z.string().datetime().optional(),
-    author: z.string().optional(),
-  })).optional(),
-  metadata: z.object({
-    model: z.string(),
-    tokensUsed: z.number().optional(),
-    processingTime: z.number().optional(),
-    sourcesCount: z.number().optional(),
-  }).optional(),
+  citations: z
+    .array(
+      z.object({
+        url: z.string().url(),
+        title: z.string(),
+        snippet: z.string().optional(),
+        publishedDate: z.string().datetime().optional(),
+        author: z.string().optional(),
+      })
+    )
+    .optional(),
+  metadata: z
+    .object({
+      model: z.string(),
+      tokensUsed: z.number().optional(),
+      processingTime: z.number().optional(),
+      sourcesCount: z.number().optional(),
+    })
+    .optional(),
 });
 
 export type CreateResearchTaskRequest = z.infer<typeof CreateResearchTaskRequestSchema>;
@@ -59,7 +65,7 @@ export type ResearchResult = z.infer<typeof ResearchResultSchema>;
 
 export class ExaResearchClient {
   private readonly apiKey?: string;
-  private readonly baseUrl = "https://api.exa.ai";
+  private readonly baseUrl = 'https://api.exa.ai';
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey;
@@ -76,17 +82,17 @@ export class ExaResearchClient {
     const streamer = createEventStreamer(taskId || `research-create-${Date.now()}`);
     const startTime = Date.now();
 
-    streamer.info("Creating research task", { 
+    streamer.info('Creating research task', {
       model: request.model,
       instructionsLength: request.instructions.length,
       hasOutputSchema: !!request.outputSchema,
-      hasWebhook: !!request.webhookUrl 
+      hasWebhook: !!request.webhookUrl,
     });
 
     try {
       const response = await httpClient.post(`${this.baseUrl}/research`, request, {
         headers: {
-          "Authorization": `Bearer ${this.getApiKey()}`,
+          Authorization: `Bearer ${this.getApiKey()}`,
         },
       });
 
@@ -94,7 +100,7 @@ export class ExaResearchClient {
       const validatedTask = ResearchTaskResponseSchema.parse(response);
 
       const result: ResultEnvelope<ResearchTask> = {
-        status: "success",
+        status: 'success',
         taskId: taskId || `research-create-${Date.now()}`,
         timing: {
           startedAt: new Date(startTime).toISOString(),
@@ -105,20 +111,19 @@ export class ExaResearchClient {
         data: validatedTask,
       };
 
-      streamer.completed("research-create", { 
+      streamer.completed('research-create', {
         researchTaskId: validatedTask.id,
-        model: validatedTask.model 
+        model: validatedTask.model,
       });
       return result;
-
     } catch (error) {
       const duration = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : String(error);
-      
+
       streamer.failed(errorMessage, { duration });
 
       return {
-        status: "error",
+        status: 'error',
         taskId: taskId || `research-create-${Date.now()}`,
         timing: {
           startedAt: new Date(startTime).toISOString(),
@@ -127,34 +132,31 @@ export class ExaResearchClient {
         },
         citations: [],
         data: {
-          status: "failed" as const,
-          id: "",
-          instructions: "",
-          model: "",
+          status: 'failed' as const,
+          id: '',
+          instructions: '',
+          model: '',
           createdAt: new Date().toISOString(),
           error: errorMessage,
         },
         error: {
-          code: "RESEARCH_CREATE_ERROR",
+          code: 'RESEARCH_CREATE_ERROR',
           message: errorMessage,
         },
       };
     }
   }
 
-  async getResearchTask(
-    taskId: string,
-    requestId?: string
-  ): Promise<ResultEnvelope<ResearchTask>> {
+  async getResearchTask(taskId: string, requestId?: string): Promise<ResultEnvelope<ResearchTask>> {
     const streamer = createEventStreamer(requestId || `research-get-${Date.now()}`);
     const startTime = Date.now();
 
-    streamer.info("Fetching research task", { taskId });
+    streamer.info('Fetching research task', { taskId });
 
     try {
       const response = await httpClient.get(`${this.baseUrl}/research/${taskId}`, {
         headers: {
-          "Authorization": `Bearer ${this.getApiKey()}`,
+          Authorization: `Bearer ${this.getApiKey()}`,
         },
       });
 
@@ -162,7 +164,7 @@ export class ExaResearchClient {
       const validatedTask = ResearchTaskResponseSchema.parse(response);
 
       const result: ResultEnvelope<ResearchTask> = {
-        status: "success",
+        status: 'success',
         taskId: requestId || `research-get-${Date.now()}`,
         timing: {
           startedAt: new Date(startTime).toISOString(),
@@ -173,20 +175,19 @@ export class ExaResearchClient {
         data: validatedTask,
       };
 
-      streamer.completed("research-get", { 
+      streamer.completed('research-get', {
         taskId: validatedTask.id,
-        status: validatedTask.status 
+        status: validatedTask.status,
       });
       return result;
-
     } catch (error) {
       const duration = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : String(error);
-      
+
       streamer.failed(errorMessage, { duration });
 
       return {
-        status: "error",
+        status: 'error',
         taskId: requestId || `research-get-${Date.now()}`,
         timing: {
           startedAt: new Date(startTime).toISOString(),
@@ -195,15 +196,15 @@ export class ExaResearchClient {
         },
         citations: [],
         data: {
-          status: "failed" as const,
-          id: "",
-          instructions: "",
-          model: "",
+          status: 'failed' as const,
+          id: '',
+          instructions: '',
+          model: '',
           createdAt: new Date().toISOString(),
           error: errorMessage,
         },
         error: {
-          code: "RESEARCH_GET_ERROR",
+          code: 'RESEARCH_GET_ERROR',
           message: errorMessage,
         },
       };
@@ -214,8 +215,8 @@ export class ExaResearchClient {
     options: {
       page?: number;
       pageSize?: number;
-      status?: ("pending" | "running" | "completed" | "failed")[];
-      model?: ("exa-research" | "exa-research-pro")[];
+      status?: ('pending' | 'running' | 'completed' | 'failed')[];
+      model?: ('exa-research' | 'exa-research-pro')[];
     } = {},
     taskId?: string
   ): Promise<ResultEnvelope<z.infer<typeof ResearchTaskListResponseSchema>>> {
@@ -228,30 +229,27 @@ export class ExaResearchClient {
     });
 
     if (options.status) {
-      params.append("status", options.status.join(","));
+      params.append('status', options.status.join(','));
     }
 
     if (options.model) {
-      params.append("model", options.model.join(","));
+      params.append('model', options.model.join(','));
     }
 
-    streamer.info("Listing research tasks", options);
+    streamer.info('Listing research tasks', options);
 
     try {
-      const response = await httpClient.get(
-        `${this.baseUrl}/research?${params}`,
-        {
-          headers: {
-            "Authorization": `Bearer ${this.getApiKey()}`,
-          },
-        }
-      );
+      const response = await httpClient.get(`${this.baseUrl}/research?${params}`, {
+        headers: {
+          Authorization: `Bearer ${this.getApiKey()}`,
+        },
+      });
 
       const duration = Date.now() - startTime;
       const validatedResponse = ResearchTaskListResponseSchema.parse(response);
 
       const result: ResultEnvelope<z.infer<typeof ResearchTaskListResponseSchema>> = {
-        status: "success",
+        status: 'success',
         taskId: taskId || `research-list-${Date.now()}`,
         timing: {
           startedAt: new Date(startTime).toISOString(),
@@ -262,20 +260,19 @@ export class ExaResearchClient {
         data: validatedResponse,
       };
 
-      streamer.completed("research-list", { 
+      streamer.completed('research-list', {
         tasksCount: validatedResponse.tasks.length,
-        total: validatedResponse.total 
+        total: validatedResponse.total,
       });
       return result;
-
     } catch (error) {
       const duration = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : String(error);
-      
+
       streamer.failed(errorMessage, { duration });
 
       return {
-        status: "error",
+        status: 'error',
         taskId: taskId || `research-list-${Date.now()}`,
         timing: {
           startedAt: new Date(startTime).toISOString(),
@@ -290,7 +287,7 @@ export class ExaResearchClient {
           pageSize: 20,
         },
         error: {
-          code: "RESEARCH_LIST_ERROR",
+          code: 'RESEARCH_LIST_ERROR',
           message: errorMessage,
         },
       };
@@ -308,36 +305,38 @@ export class ExaResearchClient {
     const startTime = Date.now();
     let attempts = 0;
 
-    streamer.asyncStarted("research-completion-poll", maxWaitTime, { researchTaskId });
+    streamer.asyncStarted('research-completion-poll', maxWaitTime, { researchTaskId });
 
     while (Date.now() - startTime < maxWaitTime) {
       attempts++;
-      streamer.asyncPolling("research-completion-poll", attempts);
+      streamer.asyncPolling('research-completion-poll', attempts);
 
       try {
         const taskResult = await this.getResearchTask(researchTaskId, taskId);
-        
-        if (taskResult.status === "error" || !taskResult.data) {
-          throw new Error(taskResult.error?.message || "Failed to get research task");
+
+        if (taskResult.status === 'error' || !taskResult.data) {
+          throw new Error(taskResult.error?.message || 'Failed to get research task');
         }
 
         const researchTask = taskResult.data;
 
-        if (researchTask.status === "completed") {
+        if (researchTask.status === 'completed') {
           const duration = Date.now() - startTime;
-          
+
           // Transform task result to research result format
           const researchResult: ResearchResult = {
             taskId: researchTask.id,
-            status: "completed",
+            status: 'completed',
             result: researchTask.result,
             metadata: {
               model: researchTask.model,
-              processingTime: researchTask.completedAt && researchTask.startedAt 
-                ? new Date(researchTask.completedAt).getTime() - new Date(researchTask.startedAt).getTime()
-                : undefined,
-              sourcesCount: Array.isArray(researchTask.result?.citations) 
-                ? researchTask.result.citations.length 
+              processingTime:
+                researchTask.completedAt && researchTask.startedAt
+                  ? new Date(researchTask.completedAt).getTime() -
+                    new Date(researchTask.startedAt).getTime()
+                  : undefined,
+              sourcesCount: Array.isArray(researchTask.result?.citations)
+                ? researchTask.result.citations.length
                 : undefined,
             },
           };
@@ -354,7 +353,7 @@ export class ExaResearchClient {
           }
 
           const result: ResultEnvelope<ResearchResult> = {
-            status: "success",
+            status: 'success',
             taskId: taskId || `research-poll-${Date.now()}`,
             timing: {
               startedAt: new Date(startTime).toISOString(),
@@ -365,24 +364,23 @@ export class ExaResearchClient {
             data: researchResult,
           };
 
-          streamer.asyncCompleted("research-completion-poll", { 
+          streamer.asyncCompleted('research-completion-poll', {
             researchTaskId,
             attempts,
-            result: researchResult.status 
+            result: researchResult.status,
           });
           return result;
-
-        } else if (researchTask.status === "failed") {
+        } else if (researchTask.status === 'failed') {
           const duration = Date.now() - startTime;
-          
+
           const researchResult: ResearchResult = {
             taskId: researchTask.id,
-            status: "failed",
-            error: researchTask.error || "Unknown error",
+            status: 'failed',
+            error: researchTask.error || 'Unknown error',
           };
 
           const result: ResultEnvelope<ResearchResult> = {
-            status: "error",
+            status: 'error',
             taskId: taskId || `research-poll-${Date.now()}`,
             timing: {
               startedAt: new Date(startTime).toISOString(),
@@ -392,29 +390,28 @@ export class ExaResearchClient {
             citations: [],
             data: researchResult,
             error: {
-              code: "RESEARCH_TASK_FAILED",
-              message: researchTask.error || "Research task failed",
+              code: 'RESEARCH_TASK_FAILED',
+              message: researchTask.error || 'Research task failed',
             },
           };
 
-          streamer.failed("Research task failed", { 
-            researchTaskId, 
-            attempts, 
-            error: researchTask.error 
+          streamer.failed('Research task failed', {
+            researchTaskId,
+            attempts,
+            error: researchTask.error,
           });
           return result;
         }
 
         await new Promise(resolve => setTimeout(resolve, pollInterval));
-
       } catch (error) {
         const duration = Date.now() - startTime;
         const errorMessage = error instanceof Error ? error.message : String(error);
-        
+
         streamer.failed(errorMessage, { duration, attempts });
 
         return {
-          status: "error",
+          status: 'error',
           taskId: taskId || `research-poll-${Date.now()}`,
           timing: {
             startedAt: new Date(startTime).toISOString(),
@@ -423,12 +420,12 @@ export class ExaResearchClient {
           },
           citations: [],
           data: {
-            status: "failed" as const,
+            status: 'failed' as const,
             taskId: researchTaskId,
             error: errorMessage,
           },
           error: {
-            code: "RESEARCH_POLL_ERROR",
+            code: 'RESEARCH_POLL_ERROR',
             message: errorMessage,
           },
         };
@@ -437,10 +434,10 @@ export class ExaResearchClient {
 
     // Timeout
     const duration = Date.now() - startTime;
-    streamer.failed("Research polling timeout", { duration, attempts });
+    streamer.failed('Research polling timeout', { duration, attempts });
 
     return {
-      status: "error",
+      status: 'error',
       taskId: taskId || `research-poll-${Date.now()}`,
       timing: {
         startedAt: new Date(startTime).toISOString(),
@@ -449,12 +446,12 @@ export class ExaResearchClient {
       },
       citations: [],
       data: {
-        status: "failed" as const,
+        status: 'failed' as const,
         taskId: researchTaskId,
         error: `Research polling timed out after ${maxWaitTime}ms`,
       },
       error: {
-        code: "RESEARCH_POLLING_TIMEOUT",
+        code: 'RESEARCH_POLLING_TIMEOUT',
         message: `Research polling timed out after ${maxWaitTime}ms`,
       },
     };
@@ -464,25 +461,28 @@ export class ExaResearchClient {
     const validatedTask = ResearchTaskSchema.parse(task);
 
     switch (validatedTask.operation) {
-      case "create":
+      case 'create':
         if (!validatedTask.instructions) {
-          throw new Error("instructions are required for create operation");
+          throw new Error('instructions are required for create operation');
         }
-        return this.createResearchTask({
-          instructions: validatedTask.instructions,
-          model: validatedTask.model,
-          outputSchema: validatedTask.outputSchema,
-        }, validatedTask.taskId);
-      
-      case "get":
+        return this.createResearchTask(
+          {
+            instructions: validatedTask.instructions,
+            model: validatedTask.model,
+            outputSchema: validatedTask.outputSchema,
+          },
+          validatedTask.taskId
+        );
+
+      case 'get':
         if (!validatedTask.taskId) {
-          throw new Error("taskId is required for get operation");
+          throw new Error('taskId is required for get operation');
         }
         return this.getResearchTask(validatedTask.taskId, validatedTask.taskId);
-      
-      case "list":
+
+      case 'list':
         return this.listResearchTasks({}, validatedTask.taskId);
-      
+
       default:
         throw new Error(`Unknown operation: ${validatedTask.operation}`);
     }
@@ -491,19 +491,22 @@ export class ExaResearchClient {
   // Utility methods for common research workflows
   async quickResearch(
     instructions: string,
-    model: "exa-research" | "exa-research-pro" = "exa-research",
+    model: 'exa-research' | 'exa-research-pro' = 'exa-research',
     poll: boolean = true,
     maxWaitTime: number = 600000
   ): Promise<ResultEnvelope<ResearchResult>> {
     const taskId = `research-quick-${Date.now()}`;
-    
-    // Create task
-    const createResult = await this.createResearchTask({
-      instructions,
-      model,
-    }, taskId);
 
-    if (createResult.status === "error" || !createResult.data) {
+    // Create task
+    const createResult = await this.createResearchTask(
+      {
+        instructions,
+        model,
+      },
+      taskId
+    );
+
+    if (createResult.status === 'error' || !createResult.data) {
       return createResult as unknown as ResultEnvelope<ResearchResult>;
     }
 
@@ -515,7 +518,7 @@ export class ExaResearchClient {
         ...createResult,
         data: {
           taskId: researchTaskId,
-          status: "pending" as const,
+          status: 'pending' as const,
         },
       } as ResultEnvelope<ResearchResult>;
     }
@@ -527,20 +530,23 @@ export class ExaResearchClient {
   async structuredResearch(
     instructions: string,
     outputSchema: Record<string, any>,
-    model: "exa-research" | "exa-research-pro" = "exa-research",
+    model: 'exa-research' | 'exa-research-pro' = 'exa-research',
     poll: boolean = true,
     maxWaitTime: number = 600000
   ): Promise<ResultEnvelope<ResearchResult>> {
     const taskId = `research-structured-${Date.now()}`;
-    
-    // Create task with output schema
-    const createResult = await this.createResearchTask({
-      instructions,
-      model,
-      outputSchema,
-    }, taskId);
 
-    if (createResult.status === "error" || !createResult.data) {
+    // Create task with output schema
+    const createResult = await this.createResearchTask(
+      {
+        instructions,
+        model,
+        outputSchema,
+      },
+      taskId
+    );
+
+    if (createResult.status === 'error' || !createResult.data) {
       return createResult as unknown as ResultEnvelope<ResearchResult>;
     }
 
@@ -551,7 +557,7 @@ export class ExaResearchClient {
         ...createResult,
         data: {
           taskId: researchTaskId,
-          status: "pending" as const,
+          status: 'pending' as const,
         },
       } as ResultEnvelope<ResearchResult>;
     }

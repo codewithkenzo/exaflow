@@ -271,7 +271,7 @@ function sanitizeString(input: any, maxLength = 10000): string {
     /on\w+\s*=/i,
     /__proto__/i,
     /constructor/i,
-    /prototype/i
+    /prototype/i,
   ];
 
   for (const pattern of dangerousPatterns) {
@@ -287,12 +287,14 @@ function validateDate(dateString: string): void {
   // Validate ISO 8601 date format
   const iso8601Regex = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{3})?(Z|[+-]\d{2}:\d{2})?)?$/;
   if (!iso8601Regex.test(dateString)) {
-    throw new Error('Invalid date format. Please use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss)');
+    throw new Error(
+      'Invalid date format. Please use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss)'
+    );
   }
 }
 
 // Handle tool calls
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+server.setRequestHandler(CallToolRequestSchema, async request => {
   const { name, arguments: args } = request.params;
 
   // Type assertion for arguments object (moved outside try block)
@@ -304,8 +306,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       throw new Error('Tool arguments are required');
     }
 
-    // Prevent prototype pollution
-    if (typedArgs.__proto__ || typedArgs.constructor || typedArgs.prototype) {
+    // Prevent prototype pollution (check for dangerous property access)
+    if (
+      typedArgs.hasOwnProperty('__proto__') ||
+      typedArgs.hasOwnProperty('constructor') ||
+      typedArgs.hasOwnProperty('prototype')
+    ) {
       throw new Error('Invalid arguments object');
     }
 
@@ -317,15 +323,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         // Sanitize and validate inputs
         const sanitizedQuery = sanitizeString(typedArgs.query, 5000);
-        const searchType = typedArgs.searchType && ['auto', 'keyword', 'neural', 'fast'].includes(typedArgs.searchType)
-          ? typedArgs.searchType as "auto" | "keyword" | "neural" | "fast"
-          : 'neural';
-        const numResults = typeof typedArgs.numResults === 'number' && typedArgs.numResults >= 1 && typedArgs.numResults <= 50
-          ? typedArgs.numResults
-          : 10;
+        const searchType =
+          typedArgs.searchType &&
+          ['auto', 'keyword', 'neural', 'fast'].includes(typedArgs.searchType)
+            ? (typedArgs.searchType as 'auto' | 'keyword' | 'neural' | 'fast')
+            : 'neural';
+        const numResults =
+          typeof typedArgs.numResults === 'number' &&
+          typedArgs.numResults >= 1 &&
+          typedArgs.numResults <= 50
+            ? typedArgs.numResults
+            : 10;
         const includeContents = Boolean(typedArgs.includeContents);
-        const startDate = typedArgs.startDate ? (() => { validateDate(typedArgs.startDate as string); return typedArgs.startDate as string; })() : undefined;
-        const endDate = typedArgs.endDate ? (() => { validateDate(typedArgs.endDate as string); return typedArgs.endDate as string; })() : undefined;
+        const startDate = typedArgs.startDate
+          ? (() => {
+              validateDate(typedArgs.startDate as string);
+              return typedArgs.startDate as string;
+            })()
+          : undefined;
+        const endDate = typedArgs.endDate
+          ? (() => {
+              validateDate(typedArgs.endDate as string);
+              return typedArgs.endDate as string;
+            })()
+          : undefined;
 
         const result = await runSearchTask(sanitizedQuery, {
           searchType,
@@ -355,9 +376,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         // Sanitize and validate inputs
         const sanitizedQuery = sanitizeString(typedArgs.query, 5000);
-        const tokens = typeof typedArgs.tokens === 'number' && typedArgs.tokens >= 100 && typedArgs.tokens <= 50000
-          ? typedArgs.tokens
-          : 5000;
+        const tokens =
+          typeof typedArgs.tokens === 'number' &&
+          typedArgs.tokens >= 100 &&
+          typedArgs.tokens <= 50000
+            ? typedArgs.tokens
+            : 5000;
 
         const result = await runContextTask(sanitizedQuery, {
           tokens,
@@ -517,12 +541,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
-        const livecrawl = typedArgs.livecrawl && ['always', 'fallback', 'never'].includes(typedArgs.livecrawl)
-          ? typedArgs.livecrawl as "always" | "fallback" | "never"
-          : 'fallback';
-        const subpages = typeof typedArgs.subpages === 'number' && typedArgs.subpages >= 0 && typedArgs.subpages <= 20
-          ? typedArgs.subpages
-          : 0;
+        const livecrawl =
+          typedArgs.livecrawl && ['always', 'fallback', 'never'].includes(typedArgs.livecrawl)
+            ? (typedArgs.livecrawl as 'always' | 'fallback' | 'never')
+            : 'fallback';
+        const subpages =
+          typeof typedArgs.subpages === 'number' &&
+          typedArgs.subpages >= 0 &&
+          typedArgs.subpages <= 20
+            ? typedArgs.subpages
+            : 0;
 
         const result = await runContentsTask(validUrls, {
           livecrawl,
@@ -552,12 +580,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       content: [
         {
           type: 'text',
-          text: JSON.stringify({
-            status: 'error',
-            error: errorMessage,
-            tool: name,
-            arguments: typedArgs,
-          }, null, 2),
+          text: JSON.stringify(
+            {
+              status: 'error',
+              error: errorMessage,
+              tool: name,
+              arguments: typedArgs,
+            },
+            null,
+            2
+          ),
         },
       ],
     };
@@ -568,13 +600,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  
+
   if (process.env.NODE_ENV !== 'production') {
     console.error('ExaFlow MCP server running on stdio');
   }
 }
 
-main().catch((error) => {
+main().catch(error => {
   console.error('Server error:', error);
   process.exit(1);
 });

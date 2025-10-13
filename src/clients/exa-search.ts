@@ -1,14 +1,14 @@
-import { z } from "zod";
-import { httpClient } from "../util/http";
-import { createEventStreamer } from "../util/streaming";
-import type { ResultEnvelope } from "../schema";
-import { SearchTaskSchema, CitationSchema } from "../schema";
-import { getEnv } from "../env";
+import { z } from 'zod';
+import { httpClient } from '../util/http';
+import { createEventStreamer } from '../util/streaming';
+import type { ResultEnvelope } from '../schema';
+import { SearchTaskSchema, CitationSchema } from '../schema';
+import { getEnv } from '../env';
 
 // Search API request/response schemas
 const SearchRequestSchema = z.object({
   query: z.string(),
-  type: z.enum(["auto", "keyword", "neural", "fast"]).default("auto"),
+  type: z.enum(['auto', 'keyword', 'neural', 'fast']).default('auto'),
   numResults: z.number().int().min(1).max(50).default(10),
   includeDomains: z.array(z.string()).optional(),
   excludeDomains: z.array(z.string()).optional(),
@@ -43,7 +43,7 @@ export type SearchResponse = z.infer<typeof SearchResponseSchema>;
 
 export class ExaSearchClient {
   private readonly apiKey?: string;
-  private readonly baseUrl = "https://api.exa.ai";
+  private readonly baseUrl = 'https://api.exa.ai';
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey;
@@ -56,7 +56,7 @@ export class ExaSearchClient {
   async search(
     query: string,
     options: {
-      type?: "auto" | "keyword" | "neural" | "fast";
+      type?: 'auto' | 'keyword' | 'neural' | 'fast';
       numResults?: number;
       includeDomains?: string[];
       excludeDomains?: string[];
@@ -68,7 +68,7 @@ export class ExaSearchClient {
   ): Promise<ResultEnvelope<SearchResponse>> {
     const apiKey = this.getApiKey();
     if (!apiKey) {
-      throw new Error("EXA_API_KEY is required for Search API");
+      throw new Error('EXA_API_KEY is required for Search API');
     }
 
     const streamer = createEventStreamer(taskId || `search-${Date.now()}`);
@@ -76,7 +76,7 @@ export class ExaSearchClient {
 
     const searchOptions: SearchRequest = {
       query,
-      type: options.type || "auto",
+      type: options.type || 'auto',
       numResults: options.numResults || 10,
       includeDomains: options.includeDomains,
       excludeDomains: options.excludeDomains,
@@ -85,22 +85,22 @@ export class ExaSearchClient {
       text: options.includeContents || false,
     };
 
-    streamer.info("Starting Search API request", searchOptions);
+    streamer.info('Starting Search API request', searchOptions);
 
     try {
-      streamer.apiRequest("POST", "/search", searchOptions);
+      streamer.apiRequest('POST', '/search', searchOptions);
 
       const response = await httpClient.post(`${this.baseUrl}/search`, searchOptions, {
         headers: {
-          "Authorization": `Bearer ${this.getApiKey()}`,
+          Authorization: `Bearer ${this.getApiKey()}`,
         },
       });
 
       const duration = Date.now() - startTime;
-      streamer.apiResponse("POST", "/search", 200, duration);
+      streamer.apiResponse('POST', '/search', 200, duration);
 
       const validatedResponse = SearchResponseSchema.parse(response);
-      
+
       // Map results to citations
       const citations = validatedResponse.results.map(result => {
         const citation = {
@@ -109,12 +109,12 @@ export class ExaSearchClient {
           author: result.author,
           publishedDate: result.publishedDate,
         };
-        
+
         return CitationSchema.parse(citation);
       });
 
       const result: ResultEnvelope<SearchResponse> = {
-        status: "success",
+        status: 'success',
         taskId: taskId || `search-${Date.now()}`,
         timing: {
           startedAt: new Date(startTime).toISOString(),
@@ -125,20 +125,19 @@ export class ExaSearchClient {
         data: validatedResponse,
       };
 
-      streamer.completed("search", { 
+      streamer.completed('search', {
         resultsCount: validatedResponse.results.length,
-        citationsCount: citations.length 
+        citationsCount: citations.length,
       });
       return result;
-
     } catch (error) {
       const duration = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : String(error);
-      
+
       streamer.failed(errorMessage, { duration });
 
       return {
-        status: "error",
+        status: 'error',
         taskId: taskId || `search-${Date.now()}`,
         timing: {
           startedAt: new Date(startTime).toISOString(),
@@ -146,18 +145,20 @@ export class ExaSearchClient {
           duration,
         },
         citations: [],
-        data: { results: [], query: "" },
+        data: { results: [], query: '' },
         error: {
-          code: "SEARCH_API_ERROR",
+          code: 'SEARCH_API_ERROR',
           message: errorMessage,
         },
       };
     }
   }
 
-  async executeTask(task: z.infer<typeof SearchTaskSchema>): Promise<ResultEnvelope<SearchResponse>> {
+  async executeTask(
+    task: z.infer<typeof SearchTaskSchema>
+  ): Promise<ResultEnvelope<SearchResponse>> {
     const validatedTask = SearchTaskSchema.parse(task);
-    
+
     return this.search(
       validatedTask.query,
       {
@@ -174,26 +175,26 @@ export class ExaSearchClient {
   // Utility methods for different search types
   async neuralSearch(
     query: string,
-    options: Omit<Parameters<typeof this.search>[1], "type"> = {},
+    options: Omit<Parameters<typeof this.search>[1], 'type'> = {},
     taskId?: string
   ): Promise<ResultEnvelope<SearchResponse>> {
-    return this.search(query, { ...options, type: "neural" }, taskId);
+    return this.search(query, { ...options, type: 'neural' }, taskId);
   }
 
   async keywordSearch(
     query: string,
-    options: Omit<Parameters<typeof this.search>[1], "type"> = {},
+    options: Omit<Parameters<typeof this.search>[1], 'type'> = {},
     taskId?: string
   ): Promise<ResultEnvelope<SearchResponse>> {
-    return this.search(query, { ...options, type: "keyword" }, taskId);
+    return this.search(query, { ...options, type: 'keyword' }, taskId);
   }
 
   async fastSearch(
     query: string,
-    options: Omit<Parameters<typeof this.search>[1], "type"> = {},
+    options: Omit<Parameters<typeof this.search>[1], 'type'> = {},
     taskId?: string
   ): Promise<ResultEnvelope<SearchResponse>> {
-    return this.search(query, { ...options, type: "fast" }, taskId);
+    return this.search(query, { ...options, type: 'fast' }, taskId);
   }
 
   // Search with date range
@@ -201,7 +202,7 @@ export class ExaSearchClient {
     query: string,
     startDate: string,
     endDate: string,
-    options: Omit<Parameters<typeof this.search>[1], "startDate" | "endDate"> = {},
+    options: Omit<Parameters<typeof this.search>[1], 'startDate' | 'endDate'> = {},
     taskId?: string
   ): Promise<ResultEnvelope<SearchResponse>> {
     return this.search(query, { ...options, startDate, endDate }, taskId);
@@ -214,14 +215,18 @@ export class ExaSearchClient {
       include?: string[];
       exclude?: string[];
     },
-    options: Omit<Parameters<typeof this.search>[1], "includeDomains" | "excludeDomains"> = {},
+    options: Omit<Parameters<typeof this.search>[1], 'includeDomains' | 'excludeDomains'> = {},
     taskId?: string
   ): Promise<ResultEnvelope<SearchResponse>> {
-    return this.search(query, { 
-      ...options, 
-      includeDomains: domains.include, 
-      excludeDomains: domains.exclude 
-    }, taskId);
+    return this.search(
+      query,
+      {
+        ...options,
+        includeDomains: domains.include,
+        excludeDomains: domains.exclude,
+      },
+      taskId
+    );
   }
 }
 

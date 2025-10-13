@@ -1,0 +1,28 @@
+{
+  "timestamp": 1760390741248,
+  "environment": "test",
+  "nodeVersion": "v24.3.0",
+  "platform": "linux",
+  "results": {
+    "cacheOperations": {
+      "averageTime": 0.01,
+      "throughput": 50000,
+      "memoryUsage": 5
+    },
+    "cacheHits": {
+      "cachedAccess": 0.005,
+      "uncachedAccess": 0.01,
+      "improvementRatio": 0.2
+    },
+    "largeData": {
+      "averageTime": 0.005,
+      "throughput": 10000,
+      "memoryUsage": 15
+    },
+    "concurrency": {
+      "averageLatency": 1,
+      "requestsPerSecond": 50000,
+      "errorRate": 0.1
+    }
+  }
+}

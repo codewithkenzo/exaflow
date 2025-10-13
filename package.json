@@ -15,17 +15,29 @@
     "dev:mcp": "bunx tsx src/mcp-server.ts",
     "test": "bun test",
     "test:watch": "bun test --watch",
+    "test:coverage": "bun test --coverage",
+    "test:unit": "bun test tests/unit/",
+    "test:integration": "bun test tests/integration/",
+    "test:e2e": "bun test tests/e2e/",
+    "test:ci": "bun test --coverage --bail",
+    "test:performance": "bun test tests/performance/",
+    "test:perf:cache": "bun test tests/performance/http-cache.performance.test.ts",
+    "test:perf:benchmark": "bun test tests/performance/ --reporter=verbose",
     "typecheck": "tsc --noEmit",
     "lint": "bunx tsc --noEmit && bun test",
-    "clean": "rm -rf dist",
+    "format": "bunx prettier --write \"src/**/*.{ts,js}\" \"tests/**/*.{ts,js}\"",
+    "format:check": "bunx prettier --check \"src/**/*.{ts,js}\" \"tests/**/*.{ts,js}\"",
+    "clean": "rm -rf dist coverage",
     "cleanup": "node scripts/cleanup.js",
     "cleanup:history": "node scripts/cleanup.js --history",
     "start": "bun run dist/cli.js",
-    "start:mcp": "bun run dist/mcp-server.js"
+    "start:mcp": "bun run dist/mcp-server.js",
+    "precommit": "bun run typecheck && bun run lint && bun run test:ci"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/node": "^24.7.1"
+    "@types/node": "^24.7.1",
+    "prettier": "^3.0.0"
   },
   "peerDependencies": {
     "typescript": "^5"
