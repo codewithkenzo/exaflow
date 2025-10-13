@@ -126,7 +126,14 @@ export class ExaResearchClient {
           duration,
         },
         citations: [],
-        data: null,
+        data: {
+          status: "failed" as const,
+          id: "",
+          instructions: "",
+          model: "",
+          createdAt: new Date().toISOString(),
+          error: errorMessage,
+        },
         error: {
           code: "RESEARCH_CREATE_ERROR",
           message: errorMessage,
@@ -187,7 +194,14 @@ export class ExaResearchClient {
           duration,
         },
         citations: [],
-        data: null,
+        data: {
+          status: "failed" as const,
+          id: "",
+          instructions: "",
+          model: "",
+          createdAt: new Date().toISOString(),
+          error: errorMessage,
+        },
         error: {
           code: "RESEARCH_GET_ERROR",
           message: errorMessage,
@@ -204,7 +218,7 @@ export class ExaResearchClient {
       model?: ("exa-research" | "exa-research-pro")[];
     } = {},
     taskId?: string
-  ): Promise<ResultEnvelope<ResearchTaskListResponseSchema>> {
+  ): Promise<ResultEnvelope<z.infer<typeof ResearchTaskListResponseSchema>>> {
     const streamer = createEventStreamer(taskId || `research-list-${Date.now()}`);
     const startTime = Date.now();
 
@@ -236,7 +250,7 @@ export class ExaResearchClient {
       const duration = Date.now() - startTime;
       const validatedResponse = ResearchTaskListResponseSchema.parse(response);
 
-      const result: ResultEnvelope<ResearchTaskListResponseSchema> = {
+      const result: ResultEnvelope<z.infer<typeof ResearchTaskListResponseSchema>> = {
         status: "success",
         taskId: taskId || `research-list-${Date.now()}`,
         timing: {
@@ -269,7 +283,12 @@ export class ExaResearchClient {
           duration,
         },
         citations: [],
-        data: null,
+        data: {
+          tasks: [],
+          total: 0,
+          page: 1,
+          pageSize: 20,
+        },
         error: {
           code: "RESEARCH_LIST_ERROR",
           message: errorMessage,
@@ -403,7 +422,11 @@ export class ExaResearchClient {
             duration,
           },
           citations: [],
-          data: null,
+          data: {
+            status: "failed" as const,
+            taskId: researchTaskId,
+            error: errorMessage,
+          },
           error: {
             code: "RESEARCH_POLL_ERROR",
             message: errorMessage,
@@ -425,7 +448,11 @@ export class ExaResearchClient {
         duration,
       },
       citations: [],
-      data: null,
+      data: {
+        status: "failed" as const,
+        taskId: researchTaskId,
+        error: `Research polling timed out after ${maxWaitTime}ms`,
+      },
       error: {
         code: "RESEARCH_POLLING_TIMEOUT",
         message: `Research polling timed out after ${maxWaitTime}ms`,
@@ -445,16 +472,16 @@ export class ExaResearchClient {
           instructions: validatedTask.instructions,
           model: validatedTask.model,
           outputSchema: validatedTask.outputSchema,
-        }, validatedTask.id);
+        }, validatedTask.taskId);
       
       case "get":
         if (!validatedTask.taskId) {
           throw new Error("taskId is required for get operation");
         }
-        return this.getResearchTask(validatedTask.taskId, validatedTask.id);
+        return this.getResearchTask(validatedTask.taskId, validatedTask.taskId);
       
       case "list":
-        return this.listResearchTasks({}, validatedTask.id);
+        return this.listResearchTasks({}, validatedTask.taskId);
       
       default:
         throw new Error(`Unknown operation: ${validatedTask.operation}`);
@@ -477,7 +504,7 @@ export class ExaResearchClient {
     }, taskId);
 
     if (createResult.status === "error" || !createResult.data) {
-      return createResult as ResultEnvelope<ResearchResult>;
+      return createResult as unknown as ResultEnvelope<ResearchResult>;
     }
 
     const researchTaskId = createResult.data.id;
@@ -494,7 +521,7 @@ export class ExaResearchClient {
     }
 
     // Poll for completion
-    return this.pollResearchCompletion(researchTaskId, maxWaitTime, taskId);
+    return this.pollResearchCompletion(researchTaskId, maxWaitTime, undefined, taskId);
   }
 
   async structuredResearch(
@@ -514,7 +541,7 @@ export class ExaResearchClient {
     }, taskId);
 
     if (createResult.status === "error" || !createResult.data) {
-      return createResult as ResultEnvelope<ResearchResult>;
+      return createResult as unknown as ResultEnvelope<ResearchResult>;
     }
 
     const researchTaskId = createResult.data.id;
@@ -530,7 +557,7 @@ export class ExaResearchClient {
     }
 
     // Poll for completion
-    return this.pollResearchCompletion(researchTaskId, maxWaitTime, taskId);
+    return this.pollResearchCompletion(researchTaskId, maxWaitTime, undefined, taskId);
   }
 }
 

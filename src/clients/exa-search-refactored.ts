@@ -1,9 +1,7 @@
 import { z } from "zod";
-import { httpClient } from "../util/http";
-import { createEventStreamer } from "../util/streaming";
+import { BaseExaClient } from "./base-client";
 import type { ResultEnvelope } from "../schema";
 import { SearchTaskSchema, CitationSchema } from "../schema";
-import { getEnv } from "../env";
 
 // Search API request/response schemas
 const SearchRequestSchema = z.object({
@@ -41,18 +39,7 @@ export type SearchRequest = z.infer<typeof SearchRequestSchema>;
 export type SearchResult = z.infer<typeof SearchResultSchema>;
 export type SearchResponse = z.infer<typeof SearchResponseSchema>;
 
-export class ExaSearchClient {
-  private readonly apiKey?: string;
-  private readonly baseUrl = "https://api.exa.ai";
-
-  constructor(apiKey?: string) {
-    this.apiKey = apiKey;
-  }
-
-  private getApiKey(): string {
-    return this.apiKey || getEnv().EXA_API_KEY;
-  }
-
+export class ExaSearchClient extends BaseExaClient {
   async search(
     query: string,
     options: {
@@ -66,14 +53,15 @@ export class ExaSearchClient {
     } = {},
     taskId?: string
   ): Promise<ResultEnvelope<SearchResponse>> {
-    const apiKey = this.getApiKey();
-    if (!apiKey) {
-      throw new Error("EXA_API_KEY is required for Search API");
-    }
+    // Require API key for this operation
+    this.requireApiKey("Search API");
 
-    const streamer = createEventStreamer(taskId || `search-${Date.now()}`);
+    // Create streamer and start timing
+    const streamer = this.createStreamer(taskId, "search");
     const startTime = Date.now();
+    const effectiveTaskId = this.getTaskId(taskId, "search");
 
+    // Build request
     const searchOptions: SearchRequest = {
       query,
       type: options.type || "auto",
@@ -87,77 +75,52 @@ export class ExaSearchClient {
 
     streamer.info("Starting Search API request", searchOptions);
 
-    try {
-      streamer.apiRequest("POST", "/search", searchOptions);
+    // Execute request using base class method
+    const result = await this.executeRequest(
+      "POST",
+      "/search",
+      searchOptions,
+      SearchResponseSchema,
+      effectiveTaskId,
+      streamer,
+      startTime,
+      undefined,
+      {
+        errorCode: "SEARCH_API_ERROR",
+        errorPrefix: "Search failed",
+        fallbackData: { results: [], query: "" },
+      }
+    );
 
-      const response = await httpClient.post(`${this.baseUrl}/search`, searchOptions, {
-        headers: {
-          "Authorization": `Bearer ${this.getApiKey()}`,
-        },
-      });
-
-      const duration = Date.now() - startTime;
-      streamer.apiResponse("POST", "/search", 200, duration);
-
-      const validatedResponse = SearchResponseSchema.parse(response);
-      
-      // Map results to citations
-      const citations = validatedResponse.results.map(result => {
+    // If successful, transform results to add citations
+    if (result.status === "success" && result.data) {
+      const citations = result.data.results.map(result => {
         const citation = {
           url: result.url,
           title: result.title,
           author: result.author,
           publishedDate: result.publishedDate,
         };
-        
+
         return CitationSchema.parse(citation);
       });
 
-      const result: ResultEnvelope<SearchResponse> = {
-        status: "success",
-        taskId: taskId || `search-${Date.now()}`,
-        timing: {
-          startedAt: new Date(startTime).toISOString(),
-          completedAt: new Date().toISOString(),
-          duration,
-        },
-        citations,
-        data: validatedResponse,
-      };
+      // Update result with citations
+      result.citations = citations;
 
-      streamer.completed("search", { 
-        resultsCount: validatedResponse.results.length,
-        citationsCount: citations.length 
+      // Log completion
+      streamer.completed("search", {
+        resultsCount: result.data.results.length,
+        citationsCount: citations.length
       });
-      return result;
-
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      
-      streamer.failed(errorMessage, { duration });
-
-      return {
-        status: "error",
-        taskId: taskId || `search-${Date.now()}`,
-        timing: {
-          startedAt: new Date(startTime).toISOString(),
-          completedAt: new Date().toISOString(),
-          duration,
-        },
-        citations: [],
-        data: { results: [], query: "" },
-        error: {
-          code: "SEARCH_API_ERROR",
-          message: errorMessage,
-        },
-      };
     }
+
+    return result;
   }
 
   async executeTask(task: z.infer<typeof SearchTaskSchema>): Promise<ResultEnvelope<SearchResponse>> {
-    const validatedTask = SearchTaskSchema.parse(task);
-    
+    const validatedTask = this.validateTask(task, SearchTaskSchema);
+
     return this.search(
       validatedTask.query,
       {
@@ -217,10 +180,10 @@ export class ExaSearchClient {
     options: Omit<Parameters<typeof this.search>[1], "includeDomains" | "excludeDomains"> = {},
     taskId?: string
   ): Promise<ResultEnvelope<SearchResponse>> {
-    return this.search(query, { 
-      ...options, 
-      includeDomains: domains.include, 
-      excludeDomains: domains.exclude 
+    return this.search(query, {
+      ...options,
+      includeDomains: domains.include,
+      excludeDomains: domains.exclude
     }, taskId);
   }
 }

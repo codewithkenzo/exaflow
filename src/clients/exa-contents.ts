@@ -156,7 +156,7 @@ export class ExaContentsClient {
           duration,
         },
         citations: [],
-        data: null,
+        data: { results: [] },
         error: {
           code: "CONTENTS_API_ERROR",
           message: errorMessage,

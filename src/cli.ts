@@ -3,23 +3,289 @@
 import { Command } from "commander";
 
 import { loadEnv } from "./env";
-import { 
-  runBatch, 
-  runContextTask, 
-  runSearchTask, 
-  runContentsTask, 
-  runWebsetTask, 
-  runResearchTask 
+import {
+  runBatch,
+  runContextTask,
+  runSearchTask,
+  runContentsTask,
+  runWebsetTask,
+  runResearchTask
 } from "./index";
-import { 
+import {
   EnhancedTaskSchema
 } from "./schema";
-import { 
-  readInputFile, 
+import {
+  readInputFile,
   readStdin,
-  fs 
+  fs
 } from "./util/fs";
 import { streamResult, streamResultCompact, createEventStreamer } from "./util/streaming";
+
+// Type definitions for better type safety
+interface GlobalOptions {
+  concurrency: string;
+  timeout: string;
+  compact: boolean;
+  silent: boolean;
+}
+
+interface CommandContext {
+  globalOptions: GlobalOptions;
+  streamer: ReturnType<typeof createEventStreamer> | null;
+  concurrency: number;
+  timeout: number;
+}
+
+interface SearchResultOptions {
+  type: "auto" | "keyword" | "neural" | "fast";
+  numResults: string;
+  includeContents: boolean;
+  startDate?: string;
+  endDate?: string;
+}
+
+interface ContentsOptions {
+  livecrawl: string;
+  subpages: string;
+  subpageTarget?: string;
+}
+
+interface WebsetOptions {
+  websetId?: string;
+  searchQuery?: string;
+  enrichmentType?: string;
+  webhook: boolean;
+  poll: boolean;
+}
+
+interface ResearchOptions {
+  instructions?: string;
+  instructionsFile?: string;
+  model: string;
+  schema?: string;
+  taskId?: string;
+  poll: boolean;
+}
+
+// Utility Functions
+
+/**
+ * Extracts global options and sets up streaming context
+ */
+function createCommandContext(command: any): CommandContext {
+  const globalOptions = command.parent?.opts() as GlobalOptions || {
+    concurrency: "5",
+    timeout: "30000",
+    compact: false,
+    silent: false
+  };
+
+  const streamOutput = !globalOptions.silent;
+  const streamer = streamOutput ? createEventStreamer(`cli-${Date.now()}`) : null;
+
+  return {
+    globalOptions,
+    streamer,
+    concurrency: parseInt(globalOptions.concurrency),
+    timeout: parseInt(globalOptions.timeout)
+  };
+}
+
+/**
+ * Handles CLI errors with proper streamer notification and exit codes
+ */
+function handleCliError(error: unknown, streamer: ReturnType<typeof createEventStreamer> | null): never {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  streamer?.failed(`CLI error: ${errorMessage}`);
+  console.error("Error:", errorMessage);
+  process.exit(1);
+}
+
+/**
+ * Processes and outputs a single result
+ */
+function processResult(result: any, globalOptions: GlobalOptions): number {
+  if (globalOptions.compact) {
+    streamResultCompact(result);
+  } else {
+    streamResult(result);
+  }
+  return result.status === "error" ? 1 : 0;
+}
+
+/**
+ * Processes and outputs multiple results from batch operations
+ */
+function processBatchResults(results: any[], globalOptions: GlobalOptions): number {
+  results.forEach(result => {
+    if (globalOptions.compact) {
+      streamResultCompact(result);
+    } else {
+      streamResult(result);
+    }
+  });
+
+  const errorCount = results.filter(r => r.status === "error").length;
+  return errorCount > 0 ? 1 : 0;
+}
+
+/**
+ * Creates a search task from query and options
+ */
+function createSearchTask(
+  query: string,
+  options: SearchResultOptions,
+  timeout: number,
+  taskId: string
+): any {
+  return EnhancedTaskSchema.parse({
+    type: "search",
+    query,
+    searchType: options.type,
+    numResults: parseInt(options.numResults),
+    includeContents: options.includeContents,
+    startDate: options.startDate,
+    endDate: options.endDate,
+    timeout,
+    retries: 3,
+    id: taskId,
+  });
+}
+
+/**
+ * Processes queries from stdin for batch operations
+ */
+async function processStdinQueries(
+  options: SearchResultOptions,
+  timeout: number,
+  baseTaskId: string
+): Promise<any[]> {
+  const stdinData = await readStdin();
+  const queries = stdinData.trim().split('\n').filter(line => line.trim());
+
+  return queries.map((q, index) =>
+    createSearchTask(q, options, timeout, `${baseTaskId}-${index}`)
+  );
+}
+
+/**
+ * Processes queries from input file for batch operations
+ */
+async function processInputFileQueries(
+  inputFile: string,
+  options: SearchResultOptions,
+  timeout: number,
+  baseTaskId: string
+): Promise<any[]> {
+  const inputData = await readInputFile(inputFile);
+
+  if (Array.isArray(inputData)) {
+    return inputData.length > 0 && typeof inputData[0] === "string"
+      ? // Array of query strings
+        inputData.map((q, index) =>
+          createSearchTask(q, options, timeout, `${baseTaskId}-${index}`)
+        )
+      : // Array of task objects
+        inputData.map((task, index) => EnhancedTaskSchema.parse({
+          ...task,
+          type: "search",
+          timeout: task.timeout || timeout,
+          retries: task.retries || 3,
+          id: task.id || `${baseTaskId}-${index}`,
+        }));
+  } else if (inputData && typeof inputData === 'object' && 'tasks' in inputData && Array.isArray((inputData as any).tasks)) {
+    // Object with tasks array
+    const dataWithTasks = inputData as { tasks: any[] };
+    return dataWithTasks.tasks.map((task: any, index: number) => EnhancedTaskSchema.parse({
+      ...task,
+      type: "search",
+      timeout: task.timeout || timeout,
+      retries: task.retries || 3,
+      id: task.id || `${baseTaskId}-${index}`,
+    }));
+  } else {
+    throw new Error("Invalid input file format");
+  }
+}
+
+/**
+ * Safely parses JSON schema file with security validation
+ */
+async function parseSchemaFile(schemaFile: string): Promise<Record<string, any>> {
+  const schemaContent = await fs.readFile(schemaFile);
+
+  // Validate JSON format before parsing
+  if (typeof schemaContent !== 'string' || schemaContent.trim().startsWith('__proto__')) {
+    throw new Error('Invalid schema file format');
+  }
+
+  try {
+    const parsed = JSON.parse(schemaContent);
+
+    // Validate it's a valid JSON schema object
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('Schema must be a valid JSON object');
+    }
+
+    // Check for dangerous prototype pollution patterns
+    const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+    const checkForDangerousKeys = (obj: any, path = '') => {
+      for (const key in obj) {
+        if (dangerousKeys.includes(key)) {
+          throw new Error(`Dangerous key "${key}" found in schema at ${path}`);
+        }
+        if (obj[key] && typeof obj[key] === 'object') {
+          checkForDangerousKeys(obj[key], `${path}.${key}`);
+        }
+      }
+    };
+    checkForDangerousKeys(parsed);
+
+    return parsed;
+  } catch (parseError) {
+    throw new Error(`Failed to parse schema file: ${parseError instanceof Error ? parseError.message : 'Invalid JSON'}`);
+  }
+}
+
+/**
+ * Loads research instructions from either direct text or file
+ */
+async function loadResearchInstructions(options: ResearchOptions): Promise<string> {
+  if (options.instructionsFile) {
+    return await fs.readFile(options.instructionsFile);
+  } else if (options.instructions) {
+    return options.instructions;
+  } else {
+    throw new Error("Either --instructions or --instructions-file is required for create operation");
+  }
+}
+
+/**
+ * Extracts URLs from various input sources
+ */
+async function extractUrls(options: { stdin?: boolean; ids?: string }): Promise<string[]> {
+  let urls: string[] = [];
+
+  if (options.stdin) {
+    const stdinData = await readStdin();
+    urls = stdinData.trim().split('\n')
+      .map(line => line.trim())
+      .filter(line => line && line.startsWith('http'));
+  } else if (options.ids) {
+    const fileContent = await fs.readFile(options.ids);
+    urls = fileContent.trim().split('\n')
+      .map(line => line.trim())
+      .filter(line => line && line.startsWith('http'));
+  } else {
+    throw new Error("Either provide --ids file or use --stdin");
+  }
+
+  if (urls.length === 0) {
+    throw new Error("No URLs found");
+  }
+
+  return urls;
+}
 
 // Load environment with error handling
 try {
@@ -106,29 +372,19 @@ program
   .option("--tokens <number>", "Number of tokens for response", "5000")
   .option("--timeout <number>", "Request timeout in milliseconds")
   .action(async (query: string, options: any, command: any) => {
-    const globalOptions = command.parent?.opts() || {};
-    const streamOutput = !globalOptions.silent;
-    const streamer = streamOutput ? createEventStreamer(`cli-context-${Date.now()}`) : null;
+    const { globalOptions, streamer, timeout: globalTimeout } = createCommandContext(command);
 
     try {
       const result = await runContextTask(query, {
         tokens: parseInt(options.tokens),
-        timeout: parseInt(options.timeout || globalOptions.timeout),
+        timeout: parseInt(options.timeout || globalTimeout.toString()),
         taskId: `cli-context-${Date.now()}`,
       });
 
-      if (globalOptions.compact) {
-        streamResultCompact(result);
-      } else {
-        streamResult(result);
-      }
-
-      process.exit(result.status === "error" ? 1 : 0);
+      process.exit(processResult(result, globalOptions));
 
     } catch (error) {
-      streamer?.failed(`CLI error: ${error instanceof Error ? error.message : String(error)}`);
-      console.error("Error:", error instanceof Error ? error.message : String(error));
-      process.exit(1);
+      handleCliError(error, streamer);
     }
   });
 
@@ -145,130 +401,50 @@ program
   .option("--start-date <date>", "Start date filter (ISO 8601)")
   .option("--end-date <date>", "End date filter (ISO 8601)")
   .action(async (query: string | undefined, options: any, command: any) => {
-    const globalOptions = command.parent?.opts() || {};
-    const streamOutput = !globalOptions.silent;
-    const streamer = streamOutput ? createEventStreamer(`cli-search-${Date.now()}`) : null;
+    const { globalOptions, streamer, concurrency, timeout } = createCommandContext(command);
 
     try {
-      const concurrency = parseInt(globalOptions.concurrency);
-      const timeout = parseInt(globalOptions.timeout);
+      const searchOptions: SearchResultOptions = {
+        type: options.type,
+        numResults: options.numResults,
+        includeContents: options.includeContents,
+        startDate: options.startDate,
+        endDate: options.endDate,
+      };
+
+      const baseTaskId = `cli-search-${Date.now()}`;
 
       if (options.stdin) {
         // Handle stdin input
-        const stdinData = await readStdin();
-        const queries = stdinData.trim().split('\n').filter(line => line.trim());
-        
-        const tasks = queries.map((q, index) => EnhancedTaskSchema.parse({
-          type: "search",
-          query: q,
-          searchType: options.type,
-          numResults: parseInt(options.numResults),
-          includeContents: options.includeContents,
-          startDate: options.startDate,
-          endDate: options.endDate,
-          timeout,
-          retries: 3,
-          id: `cli-search-${Date.now()}-${index}`,
-        }));
-
+        const tasks = await processStdinQueries(searchOptions, timeout, baseTaskId);
         const results = await runBatch(tasks, concurrency);
-        results.forEach(result => {
-          if (globalOptions.compact) {
-            streamResultCompact(result);
-          } else {
-            streamResult(result);
-          }
-        });
-
-        const errorCount = results.filter(r => r.status === "error").length;
-        process.exit(errorCount > 0 ? 1 : 0);
+        process.exit(processBatchResults(results, globalOptions));
 
       } else if (options.input) {
         // Handle file input
-        const inputData = await readInputFile(options.input);
-        
-        let tasks: any[] = [];
-        
-        if (Array.isArray(inputData)) {
-          // Array of queries or tasks
-          if (inputData.length > 0 && typeof inputData[0] === "string") {
-            // Array of query strings
-            tasks = inputData.map((q, index) => EnhancedTaskSchema.parse({
-              type: "search",
-              query: q,
-              searchType: options.type,
-              numResults: parseInt(options.numResults),
-              includeContents: options.includeContents,
-              startDate: options.startDate,
-              endDate: options.endDate,
-              timeout,
-              retries: 3,
-              id: `cli-search-${Date.now()}-${index}`,
-            }));
-          } else {
-            // Array of task objects
-            tasks = inputData.map((task, index) => EnhancedTaskSchema.parse({
-              ...task,
-              type: "search",
-              timeout: task.timeout || timeout,
-              retries: task.retries || 3,
-              id: task.id || `cli-search-${Date.now()}-${index}`,
-            }));
-          }
-        } else if (inputData && typeof inputData === 'object' && 'tasks' in inputData && Array.isArray(inputData.tasks)) {
-          // Object with tasks array
-          const dataWithTasks = inputData as { tasks: any[] };
-          tasks = dataWithTasks.tasks.map((task: any, index: number) => EnhancedTaskSchema.parse({
-            ...task,
-            type: "search",
-            timeout: task.timeout || timeout,
-            retries: task.retries || 3,
-            id: task.id || `cli-search-${Date.now()}-${index}`,
-          }));
-        } else {
-          throw new Error("Invalid input file format");
-        }
-
+        const tasks = await processInputFileQueries(options.input, searchOptions, timeout, baseTaskId);
         const results = await runBatch(tasks, concurrency);
-        results.forEach(result => {
-          if (globalOptions.compact) {
-            streamResultCompact(result);
-          } else {
-            streamResult(result);
-          }
-        });
-
-        const errorCount = results.filter(r => r.status === "error").length;
-        process.exit(errorCount > 0 ? 1 : 0);
+        process.exit(processBatchResults(results, globalOptions));
 
       } else if (query) {
         // Single query
         const result = await runSearchTask(query, {
-          searchType: options.type,
-          numResults: parseInt(options.numResults),
-          includeContents: options.includeContents,
-          startDate: options.startDate,
-          endDate: options.endDate,
+          searchType: searchOptions.type,
+          numResults: parseInt(searchOptions.numResults),
+          includeContents: searchOptions.includeContents,
+          startDate: searchOptions.startDate,
+          endDate: searchOptions.endDate,
           timeout,
-          taskId: `cli-search-${Date.now()}`,
+          taskId: baseTaskId,
         });
-
-        if (globalOptions.compact) {
-          streamResultCompact(result);
-        } else {
-          streamResult(result);
-        }
-
-        process.exit(result.status === "error" ? 1 : 0);
+        process.exit(processResult(result, globalOptions));
 
       } else {
         throw new Error("Either provide a query argument or use --input or --stdin");
       }
 
     } catch (error) {
-      streamer?.failed(`CLI error: ${error instanceof Error ? error.message : String(error)}`);
-      console.error("Error:", error instanceof Error ? error.message : String(error));
-      process.exit(1);
+      handleCliError(error, streamer);
     }
   });
 
@@ -282,35 +458,14 @@ program
   .option("--subpages <number>", "Number of subpages to crawl", "0")
   .option("--subpage-target <items>", "Target subpage sections (comma-separated)")
   .action(async (options: any, command: any) => {
-    const globalOptions = command.parent?.opts() || {};
-    const streamOutput = !globalOptions.silent;
-    const streamer = streamOutput ? createEventStreamer(`cli-contents-${Date.now()}`) : null;
+    const { globalOptions, streamer, timeout } = createCommandContext(command);
 
     try {
-      const timeout = parseInt(globalOptions.timeout);
-      const subpageTarget = options.subpageTarget 
+      const subpageTarget = options.subpageTarget
         ? options.subpageTarget.split(',').map((s: string) => s.trim())
         : [];
 
-      let urls: string[] = [];
-
-      if (options.stdin) {
-        const stdinData = await readStdin();
-        urls = stdinData.trim().split('\n')
-          .map(line => line.trim())
-          .filter(line => line && line.startsWith('http'));
-      } else if (options.ids) {
-        const fileContent = await fs.readFile(options.ids);
-        urls = fileContent.trim().split('\n')
-          .map(line => line.trim())
-          .filter(line => line && line.startsWith('http'));
-      } else {
-        throw new Error("Either provide --ids file or use --stdin");
-      }
-
-      if (urls.length === 0) {
-        throw new Error("No URLs found");
-      }
+      const urls = await extractUrls({ stdin: options.stdin, ids: options.ids });
 
       const result = await runContentsTask(urls, {
         livecrawl: options.livecrawl,
@@ -320,18 +475,10 @@ program
         taskId: `cli-contents-${Date.now()}`,
       });
 
-      if (globalOptions.compact) {
-        streamResultCompact(result);
-      } else {
-        streamResult(result);
-      }
-
-      process.exit(result.status === "error" ? 1 : 0);
+      process.exit(processResult(result, globalOptions));
 
     } catch (error) {
-      streamer?.failed(`CLI error: ${error instanceof Error ? error.message : String(error)}`);
-      console.error("Error:", error instanceof Error ? error.message : String(error));
-      process.exit(1);
+      handleCliError(error, streamer);
     }
   });
 
@@ -346,38 +493,34 @@ program
   .option("--webhook", "Use webhook mode for async operations", false)
   .option("--poll", "Poll for completion (works with create and search)", false)
   .action(async (operation: string, options: any, command: any) => {
-    const globalOptions = command.parent?.opts() || {};
-    const streamOutput = !globalOptions.silent;
-    const streamer = streamOutput ? createEventStreamer(`cli-websets-${Date.now()}`) : null;
+    const { globalOptions, streamer, timeout } = createCommandContext(command);
 
     try {
-      const timeout = parseInt(globalOptions.timeout);
-
       if (!["create", "search", "poll", "enrich"].includes(operation)) {
         throw new Error("Invalid operation. Use: create, search, poll, enrich");
       }
 
-      const result = await runWebsetTask(operation as any, {
+      const websetOptions: WebsetOptions = {
         websetId: options.websetId,
         searchQuery: options.searchQuery,
         enrichmentType: options.enrichmentType,
-        useWebhook: options.webhook,
+        webhook: options.webhook,
+        poll: options.poll,
+      };
+
+      const result = await runWebsetTask(operation as any, {
+        websetId: websetOptions.websetId,
+        searchQuery: websetOptions.searchQuery,
+        enrichmentType: websetOptions.enrichmentType,
+        useWebhook: websetOptions.webhook,
         timeout,
         taskId: `cli-websets-${Date.now()}`,
       });
 
-      if (globalOptions.compact) {
-        streamResultCompact(result);
-      } else {
-        streamResult(result);
-      }
-
-      process.exit(result.status === "error" ? 1 : 0);
+      process.exit(processResult(result, globalOptions));
 
     } catch (error) {
-      streamer?.failed(`CLI error: ${error instanceof Error ? error.message : String(error)}`);
-      console.error("Error:", error instanceof Error ? error.message : String(error));
-      process.exit(1);
+      handleCliError(error, streamer);
     }
   });
 
@@ -393,97 +536,53 @@ program
   .option("--task-id <id>", "Task ID for get operation")
   .option("--poll", "Poll for completion (works with create)", false)
   .action(async (operation: string = "create", options: any, command: any) => {
-    const globalOptions = command.parent?.opts() || {};
-    const streamOutput = !globalOptions.silent;
-    const streamer = streamOutput ? createEventStreamer(`cli-research-${Date.now()}`) : null;
+    const { globalOptions, streamer, timeout } = createCommandContext(command);
 
     try {
-      const timeout = parseInt(globalOptions.timeout);
-
       if (!["create", "get", "list"].includes(operation)) {
         throw new Error("Invalid operation. Use: create, get, list");
       }
+
+      const researchOptions: ResearchOptions = {
+        instructions: options.instructions,
+        instructionsFile: options.instructionsFile,
+        model: options.model,
+        schema: options.schema,
+        taskId: options.taskId,
+        poll: options.poll,
+      };
 
       let instructions: string | undefined;
       let outputSchema: Record<string, any> | undefined;
 
       if (operation === "create") {
-        if (options.instructionsFile) {
-          instructions = await fs.readFile(options.instructionsFile);
-        } else if (options.instructions) {
-          instructions = options.instructions;
-        } else {
-          throw new Error("Either --instructions or --instructions-file is required for create operation");
-        }
+        instructions = await loadResearchInstructions(researchOptions);
 
-        if (options.schema) {
-          const schemaContent = await fs.readFile(options.schema);
-
-          // Secure JSON parsing to prevent prototype pollution
-          try {
-            // Validate JSON format before parsing
-            if (typeof schemaContent !== 'string' || schemaContent.trim().startsWith('__proto__')) {
-              throw new Error('Invalid schema file format');
-            }
-
-            // Parse JSON safely
-            const parsed = JSON.parse(schemaContent);
-
-            // Additional validation: ensure it's a valid JSON schema object
-            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-              throw new Error('Schema must be a valid JSON object');
-            }
-
-            // Check for dangerous prototype pollution patterns
-            const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
-            const checkForDangerousKeys = (obj: any, path = '') => {
-              for (const key in obj) {
-                if (dangerousKeys.includes(key)) {
-                  throw new Error(`Dangerous key "${key}" found in schema at ${path}`);
-                }
-                if (obj[key] && typeof obj[key] === 'object') {
-                  checkForDangerousKeys(obj[key], `${path}.${key}`);
-                }
-              }
-            };
-            checkForDangerousKeys(parsed);
-
-            outputSchema = parsed;
-          } catch (parseError) {
-            throw new Error(`Failed to parse schema file: ${parseError instanceof Error ? parseError.message : 'Invalid JSON'}`);
-          }
+        if (researchOptions.schema) {
+          outputSchema = await parseSchemaFile(researchOptions.schema);
         }
       }
 
       const researchParams: any = {
-        model: options.model,
-        taskId: options.taskId,
-        poll: options.poll,
+        model: researchOptions.model,
+        taskId: researchOptions.taskId,
+        poll: researchOptions.poll,
         timeout,
       };
-      
+
       if (instructions !== undefined) {
         researchParams.instructions = instructions;
       }
-      
+
       if (outputSchema !== undefined) {
         researchParams.outputSchema = outputSchema;
       }
 
       const result = await runResearchTask(operation as any, researchParams);
-
-      if (globalOptions.compact) {
-        streamResultCompact(result);
-      } else {
-        streamResult(result);
-      }
-
-      process.exit(result.status === "error" ? 1 : 0);
+      process.exit(processResult(result, globalOptions));
 
     } catch (error) {
-      streamer?.failed(`CLI error: ${error instanceof Error ? error.message : String(error)}`);
-      console.error("Error:", error instanceof Error ? error.message : String(error));
-      process.exit(1);
+      handleCliError(error, streamer);
     }
   });
 

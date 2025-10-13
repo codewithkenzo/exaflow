@@ -295,34 +295,37 @@ function validateDate(dateString: string): void {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
+  // Type assertion for arguments object (moved outside try block)
+  const typedArgs = args as Record<string, any>;
+
   try {
-    // Validate args exists
+    // Validate args exists and add proper type annotation
     if (!args || typeof args !== 'object') {
       throw new Error('Tool arguments are required');
     }
 
     // Prevent prototype pollution
-    if (args.__proto__ || args.constructor || args.prototype) {
+    if (typedArgs.__proto__ || typedArgs.constructor || typedArgs.prototype) {
       throw new Error('Invalid arguments object');
     }
 
     switch (name) {
       case 'exa_semantic_search': {
-        if (!args.query || typeof args.query !== 'string') {
+        if (!typedArgs.query || typeof typedArgs.query !== 'string') {
           throw new Error('query parameter is required and must be a string');
         }
 
         // Sanitize and validate inputs
-        const sanitizedQuery = sanitizeString(args.query, 5000);
-        const searchType = args.searchType && ['auto', 'keyword', 'neural', 'fast'].includes(args.searchType)
-          ? args.searchType
+        const sanitizedQuery = sanitizeString(typedArgs.query, 5000);
+        const searchType = typedArgs.searchType && ['auto', 'keyword', 'neural', 'fast'].includes(typedArgs.searchType)
+          ? typedArgs.searchType as "auto" | "keyword" | "neural" | "fast"
           : 'neural';
-        const numResults = typeof args.numResults === 'number' && args.numResults >= 1 && args.numResults <= 50
-          ? args.numResults
+        const numResults = typeof typedArgs.numResults === 'number' && typedArgs.numResults >= 1 && typedArgs.numResults <= 50
+          ? typedArgs.numResults
           : 10;
-        const includeContents = Boolean(args.includeContents);
-        const startDate = args.startDate ? (() => { validateDate(args.startDate); return args.startDate; })() : undefined;
-        const endDate = args.endDate ? (() => { validateDate(args.endDate); return args.endDate; })() : undefined;
+        const includeContents = Boolean(typedArgs.includeContents);
+        const startDate = typedArgs.startDate ? (() => { validateDate(typedArgs.startDate as string); return typedArgs.startDate as string; })() : undefined;
+        const endDate = typedArgs.endDate ? (() => { validateDate(typedArgs.endDate as string); return typedArgs.endDate as string; })() : undefined;
 
         const result = await runSearchTask(sanitizedQuery, {
           searchType,
@@ -346,14 +349,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'exa_research_discovery': {
-        if (!args.query || typeof args.query !== 'string') {
+        if (!typedArgs.query || typeof typedArgs.query !== 'string') {
           throw new Error('query parameter is required and must be a string');
         }
 
         // Sanitize and validate inputs
-        const sanitizedQuery = sanitizeString(args.query, 5000);
-        const tokens = typeof args.tokens === 'number' && args.tokens >= 100 && args.tokens <= 50000
-          ? args.tokens
+        const sanitizedQuery = sanitizeString(typedArgs.query, 5000);
+        const tokens = typeof typedArgs.tokens === 'number' && typedArgs.tokens >= 100 && typedArgs.tokens <= 50000
+          ? typedArgs.tokens
           : 5000;
 
         const result = await runContextTask(sanitizedQuery, {
@@ -374,22 +377,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'exa_professional_finder': {
-        if (!args.query || typeof args.query !== 'string') {
+        if (!typedArgs.query || typeof typedArgs.query !== 'string') {
           throw new Error('query parameter is required and must be a string');
         }
-        
-        let enhancedQuery = args.query;
-        
-        if (args.includeProfiles) {
+
+        let enhancedQuery = typedArgs.query;
+
+        if (typedArgs.includeProfiles) {
           enhancedQuery += ' site:linkedin.com';
         }
-        
-        if (args.includeCompanies) {
+
+        if (typedArgs.includeCompanies) {
           enhancedQuery += ' company OR corporation OR startup';
         }
-        
-        if (args.location) {
-          enhancedQuery += ` ${args.location}`;
+
+        if (typedArgs.location) {
+          enhancedQuery += ` ${typedArgs.location}`;
         }
 
         const result = await runSearchTask(enhancedQuery, {
@@ -412,18 +415,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'exa_code_discovery': {
-        let enhancedQuery = args.query;
-        
-        if (args.repositories) {
+        let enhancedQuery = typedArgs.query;
+
+        if (typedArgs.repositories) {
           enhancedQuery += ' site:github.com OR site:gitlab.com';
         }
-        
-        if (args.documentation) {
+
+        if (typedArgs.documentation) {
           enhancedQuery += ' documentation OR tutorial OR guide';
         }
-        
-        if (args.language) {
-          enhancedQuery += ` ${args.language} programming`;
+
+        if (typedArgs.language) {
+          enhancedQuery += ` ${typedArgs.language} programming`;
         }
 
         const result = await runSearchTask(enhancedQuery, {
@@ -446,21 +449,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'exa_knowledge_graph': {
-        let enhancedQuery = args.query;
-        const sources = Array.isArray(args.sources) ? args.sources : ['wikipedia'];
-        
+        let enhancedQuery = typedArgs.query;
+        const sources = Array.isArray(typedArgs.sources) ? typedArgs.sources : ['wikipedia'];
+
         if (sources.includes('wikipedia')) {
           enhancedQuery += ' site:wikipedia.org';
         }
-        
+
         if (sources.includes('government')) {
           enhancedQuery += ' site:.gov';
         }
-        
+
         if (sources.includes('educational')) {
           enhancedQuery += ' site:.edu OR educational';
         }
-        
+
         if (sources.includes('news')) {
           enhancedQuery += ' news OR encyclopedia';
         }
@@ -468,7 +471,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = await runSearchTask(enhancedQuery, {
           searchType: 'neural',
           numResults: 12,
-          includeContents: args.depth === 'comprehensive',
+          includeContents: typedArgs.depth === 'comprehensive',
           timeout: 30000,
           retries: 3,
           taskId: `mcp-knowledge-${Date.now()}`,
@@ -485,17 +488,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'exa_content_extract': {
-        if (!args.urls || !Array.isArray(args.urls)) {
+        if (!typedArgs.urls || !Array.isArray(typedArgs.urls)) {
           throw new Error('urls parameter is required and must be an array');
         }
 
-        if (args.urls.length === 0 || args.urls.length > 20) {
+        if (typedArgs.urls.length === 0 || typedArgs.urls.length > 20) {
           throw new Error('URLs array must contain between 1 and 20 URLs');
         }
 
         // Validate and sanitize URLs
         const validUrls: string[] = [];
-        for (const url of args.urls) {
+        for (const url of typedArgs.urls) {
           if (typeof url !== 'string') {
             throw new Error('All URLs must be strings');
           }
@@ -514,11 +517,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
-        const livecrawl = args.livecrawl && ['always', 'fallback', 'never'].includes(args.livecrawl)
-          ? args.livecrawl
+        const livecrawl = typedArgs.livecrawl && ['always', 'fallback', 'never'].includes(typedArgs.livecrawl)
+          ? typedArgs.livecrawl as "always" | "fallback" | "never"
           : 'fallback';
-        const subpages = typeof args.subpages === 'number' && args.subpages >= 0 && args.subpages <= 20
-          ? args.subpages
+        const subpages = typeof typedArgs.subpages === 'number' && typedArgs.subpages >= 0 && typedArgs.subpages <= 20
+          ? typedArgs.subpages
           : 0;
 
         const result = await runContentsTask(validUrls, {
@@ -544,7 +547,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    
+
     return {
       content: [
         {
@@ -553,7 +556,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             status: 'error',
             error: errorMessage,
             tool: name,
-            arguments: args,
+            arguments: typedArgs,
           }, null, 2),
         },
       ],

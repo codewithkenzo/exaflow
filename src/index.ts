@@ -72,29 +72,31 @@ export async function runBatch(
   streamer.batchStarted(tasks.length, concurrency);
 
   try {
-    const results = await executeWithOrdering(
+    const concurrencyResults = await executeWithOrdering(
       tasks,
       async (task: EnhancedTask) => {
         streamer.info(`Starting task: ${task.type}`, { taskId: task.id });
         const result = await runTask(task);
-        
+
         if (result.status === "success") {
-          streamer.info(`Completed task: ${task.type}`, { 
+          streamer.info(`Completed task: ${task.type}`, {
             taskId: task.id,
-            citationsCount: result.citations.length 
+            citationsCount: result.citations.length
           });
         } else {
-          streamer.warn(`Failed task: ${task.type}`, { 
+          streamer.warn(`Failed task: ${task.type}`, {
             taskId: task.id,
-            error: result.error?.message 
+            error: result.error?.message
           });
         }
-        
+
         return result;
       },
       concurrency
     );
 
+    // Extract the ResultEnvelope objects from ConcurrencyResult
+    const results = concurrencyResults.map(cr => cr.result);
     const duration = Date.now() - startTime;
     const successCount = results.filter(r => r.status === "success").length;
     const errorCount = results.filter(r => r.status === "error").length;

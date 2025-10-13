@@ -110,7 +110,7 @@ describe("Schema Validation", () => {
       if (parsedResult.success) {
         expect(parsedResult.data.status).toBe("success");
         expect(parsedResult.data.citations).toHaveLength(1);
-        expect(parsedResult.data.data.result).toBe("test data");
+        expect((parsedResult.data.data as any).result).toBe("test data");
       }
     });
 

@@ -108,7 +108,7 @@ export class ExaWebsetsClient {
   async createWebset(
     request: CreateWebsetRequest = {},
     taskId?: string
-  ): Promise<ResultEnvelope<CreateWebsetResponseSchema>> {
+  ): Promise<ResultEnvelope<z.infer<typeof CreateWebsetResponseSchema>>> {
     const streamer = createEventStreamer(taskId || `webset-create-${Date.now()}`);
     const startTime = Date.now();
 
@@ -124,7 +124,7 @@ export class ExaWebsetsClient {
       const duration = Date.now() - startTime;
       const validatedResponse = CreateWebsetResponseSchema.parse(response);
 
-      const result: ResultEnvelope<CreateWebsetResponseSchema> = {
+      const result: ResultEnvelope<z.infer<typeof CreateWebsetResponseSchema>> = {
         status: "success",
         taskId: taskId || `webset-create-${Date.now()}`,
         timing: {
@@ -154,7 +154,7 @@ export class ExaWebsetsClient {
           duration,
         },
         citations: [],
-        data: null,
+        data: { webset: { id: "", status: "failed" as const, createdAt: new Date().toISOString(), itemCount: 0 } },
         error: {
           code: "WEBSET_CREATE_ERROR",
           message: errorMessage,
@@ -167,7 +167,7 @@ export class ExaWebsetsClient {
     websetId: string,
     request: CreateWebsetSearchRequest,
     taskId?: string
-  ): Promise<ResultEnvelope<CreateWebsetSearchResponseSchema>> {
+  ): Promise<ResultEnvelope<z.infer<typeof CreateWebsetSearchResponseSchema>>> {
     const streamer = createEventStreamer(taskId || `webset-search-${Date.now()}`);
     const startTime = Date.now();
 
@@ -187,7 +187,7 @@ export class ExaWebsetsClient {
       const duration = Date.now() - startTime;
       const validatedResponse = CreateWebsetSearchResponseSchema.parse(response);
 
-      const result: ResultEnvelope<CreateWebsetSearchResponseSchema> = {
+      const result: ResultEnvelope<z.infer<typeof CreateWebsetSearchResponseSchema>> = {
         status: "success",
         taskId: taskId || `webset-search-${Date.now()}`,
         timing: {
@@ -220,7 +220,7 @@ export class ExaWebsetsClient {
           duration,
         },
         citations: [],
-        data: null,
+        data: { search: { id: "", websetId: "", query: "", status: "failed" as const, createdAt: new Date().toISOString(), resultCount: 0 } },
         error: {
           code: "WEBSET_SEARCH_ERROR",
           message: errorMessage,
@@ -237,7 +237,7 @@ export class ExaWebsetsClient {
       searchId?: string;
     } = {},
     taskId?: string
-  ): Promise<ResultEnvelope<ListWebsetItemsResponseSchema>> {
+  ): Promise<ResultEnvelope<z.infer<typeof ListWebsetItemsResponseSchema>>> {
     const streamer = createEventStreamer(taskId || `webset-items-${Date.now()}`);
     const startTime = Date.now();
 
@@ -275,7 +275,7 @@ export class ExaWebsetsClient {
         verificationReasoning: item.verificationReasoning,
       }));
 
-      const result: ResultEnvelope<ListWebsetItemsResponseSchema> = {
+      const result: ResultEnvelope<z.infer<typeof ListWebsetItemsResponseSchema>> = {
         status: "success",
         taskId: taskId || `webset-items-${Date.now()}`,
         timing: {
@@ -309,7 +309,7 @@ export class ExaWebsetsClient {
           duration,
         },
         citations: [],
-        data: null,
+        data: { items: [], total: 0, page: 1, pageSize: 50 },
         error: {
           code: "WEBSET_ITEMS_ERROR",
           message: errorMessage,
@@ -375,7 +375,7 @@ export class ExaWebsetsClient {
           duration,
         },
         citations: [],
-        data: null,
+        data: { message: "" },
         error: {
           code: "WEBSET_ENRICH_ERROR",
           message: errorMessage,
@@ -458,7 +458,7 @@ export class ExaWebsetsClient {
             duration,
           },
           citations: [],
-          data: null,
+          data: { id: "", websetId: "", query: "", status: "failed" as const, createdAt: new Date().toISOString(), resultCount: 0 },
           error: {
             code: "WEBSET_POLL_ERROR",
             message: errorMessage,
@@ -480,7 +480,7 @@ export class ExaWebsetsClient {
         duration,
       },
       citations: [],
-      data: null,
+      data: { id: "", websetId: "", query: "", status: "failed" as const, createdAt: new Date().toISOString(), resultCount: 0 },
       error: {
         code: "POLLING_TIMEOUT",
         message: `Search polling timed out after ${maxWaitTime}ms`,
@@ -501,7 +501,11 @@ export class ExaWebsetsClient {
         }
         return this.createWebsetSearch(
           validatedTask.websetId,
-          { query: validatedTask.searchQuery },
+          {
+            query: validatedTask.searchQuery,
+            searchType: "semantic" as const,
+            maxResults: 100,
+          },
           validatedTask.id
         );
       

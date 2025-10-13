@@ -71,7 +71,7 @@ describe('Security Tests', () => {
       for (const { path, expectedCode } of traversalAttempts) {
         try {
           await fs.readFile(path);
-          expect.fail(`Should have thrown for path: ${path}`);
+          throw new Error(`Should have thrown for path: ${path}`);
         } catch (error: any) {
           expect(error.code).toBe(expectedCode);
         }
@@ -87,7 +87,7 @@ describe('Security Tests', () => {
       for (const path of nullBytePaths) {
         try {
           await fs.readFile(path);
-          expect.fail(`Should have thrown for path with null byte: ${path}`);
+          throw new Error(`Should have thrown for path with null byte: ${path}`);
         } catch (error: any) {
           expect(error.code).toBe('INVALID_PATH');
         }
@@ -105,7 +105,7 @@ describe('Security Tests', () => {
       for (const path of controlCharPaths) {
         try {
           await fs.readFile(path);
-          expect.fail(`Should have thrown for path with control chars: ${path}`);
+          throw new Error(`Should have thrown for path with control chars: ${path}`);
         } catch (error: any) {
           expect(error.code).toBe('INVALID_PATH');
         }
@@ -127,7 +127,7 @@ describe('Security Tests', () => {
 
         // Try to read it - should throw
         await fs.readJson('/tmp/malicious.json');
-        expect.fail('Should have thrown for prototype pollution');
+        throw new Error('Should have thrown for prototype pollution');
       } catch (error: any) {
         expect(error.code).toBe('PROTO_POLLUTION_DETECTED');
       }
@@ -224,7 +224,7 @@ describe('Security Tests', () => {
       for (const xss of xssAttempts) {
         try {
           sanitizeString(xss);
-          expect.fail(`Should have thrown for XSS: ${xss}`);
+          throw new Error(`Should have thrown for XSS: ${xss}`);
         } catch (error: any) {
           expect(error.message).toContain('dangerous content');
         }
@@ -234,7 +234,7 @@ describe('Security Tests', () => {
       const longString = 'a'.repeat(10001);
       try {
         sanitizeString(longString);
-        expect.fail('Should have thrown for excessive length');
+        throw new Error('Should have thrown for excessive length');
       } catch (error: any) {
         expect(error.message).toContain('maximum length');
       }

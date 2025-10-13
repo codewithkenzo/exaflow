@@ -1,9 +1,7 @@
 import { z } from "zod";
-import { httpClient } from "../util/http";
-import { createEventStreamer } from "../util/streaming";
+import { BaseExaClient } from "./base-client";
 import type { ResultEnvelope } from "../schema";
 import { ContextTaskSchema } from "../schema";
-import { getEnv } from "../env";
 
 // Context API response schemas
 const ContextResponseSchema = z.object({
@@ -22,101 +20,55 @@ const ContextResponseSchema = z.object({
 
 export type ContextResponse = z.infer<typeof ContextResponseSchema>;
 
-export class ExaContextClient {
-  private readonly apiKey?: string;
-  private readonly baseUrl = "https://api.exa.ai";
-
-  constructor(apiKey?: string) {
-    this.apiKey = apiKey;
-  }
-
-  private getApiKey(): string {
-    return this.apiKey || getEnv().EXA_API_KEY;
-  }
+export class ExaContextClient extends BaseExaClient {
 
   async getContext(
     query: string,
     tokensNum: number = 5000,
     taskId?: string
   ): Promise<ResultEnvelope<ContextResponse>> {
-    const apiKey = this.getApiKey();
-    if (!apiKey) {
-      throw new Error("EXA_API_KEY is required for Context API");
-    }
-    const streamer = createEventStreamer(taskId || `context-${Date.now()}`);
+    this.requireApiKey("Context API");
+    const streamer = this.createStreamer(taskId, "context");
     const startTime = Date.now();
 
     streamer.info("Starting Context API request", { query, tokensNum });
 
-    try {
-      streamer.apiRequest("POST", "/context", { query, tokensNum });
+    // Execute request using base class method
+    const result = await this.executeRequest(
+      "POST",
+      "/context",
+      { query, tokensNum },
+      ContextResponseSchema,
+      this.getTaskId(taskId, "context"),
+      streamer,
+      startTime,
+      undefined,
+      {
+        errorCode: "CONTEXT_API_ERROR",
+        errorPrefix: "Context API request failed",
+        fallbackData: { response: "" },
+      }
+    );
 
-      const response = await httpClient.post(`${this.baseUrl}/context`, {
-        query,
-        tokensNum,
-      }, {
-        headers: {
-          "Authorization": `Bearer ${this.getApiKey()}`,
-        },
-      });
-
-      const duration = Date.now() - startTime;
-      streamer.apiResponse("POST", "/context", 200, duration);
-
-      const validatedResponse = ContextResponseSchema.parse(response);
-      
-      // Map sources to citations
-      const citations = (validatedResponse.metadata?.sources || []).map(source => ({
+    // Map sources to citations if successful
+    if (result.status === "success" && result.data.metadata?.sources) {
+      result.citations = result.data.metadata.sources.map(source => ({
         url: source.url,
         title: source.title,
         snippet: source.snippet,
       }));
-
-      const result: ResultEnvelope<ContextResponse> = {
-        status: "success",
-        taskId: taskId || `context-${Date.now()}`,
-        timing: {
-          startedAt: new Date(startTime).toISOString(),
-          completedAt: new Date().toISOString(),
-          duration,
-        },
-        citations,
-        data: validatedResponse,
-      };
-
-      streamer.completed("context", { citationsCount: citations.length });
-      return result;
-
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      
-      streamer.failed(errorMessage, { duration });
-
-      return {
-        status: "error",
-        taskId: taskId || `context-${Date.now()}`,
-        timing: {
-          startedAt: new Date(startTime).toISOString(),
-          completedAt: new Date().toISOString(),
-          duration,
-        },
-        citations: [],
-        data: undefined,
-        error: {
-          code: "CONTEXT_API_ERROR",
-          message: errorMessage,
-        },
-      };
     }
+
+    streamer.completed("context", { citationsCount: result.citations.length });
+    return result;
   }
 
   async executeTask(task: z.infer<typeof ContextTaskSchema>): Promise<ResultEnvelope<ContextResponse>> {
-    const validatedTask = ContextTaskSchema.parse(task);
+    const validatedTask = this.validateTask(task, ContextTaskSchema);
     return this.getContext(
       validatedTask.query,
       validatedTask.tokensNum,
-      validatedTask.id || `context-${Date.now()}`
+      validatedTask.id
     );
   }
 
@@ -131,7 +83,7 @@ export class ExaContextClient {
     return this.getContext(
       query,
       options.tokens || 5000,
-      options.taskId
+      this.getTaskId(options.taskId, "context-query")
     );
   }
 }
