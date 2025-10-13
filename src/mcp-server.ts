@@ -247,6 +247,50 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
+// Sanitization utilities
+function sanitizeString(input: any, maxLength = 10000): string {
+  if (typeof input !== 'string') {
+    throw new Error('Input must be a string');
+  }
+
+  // Remove potentially dangerous characters
+  const sanitized = input
+    .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+    .replace(/[\uFFFE\uFFFF]/g, '') // Remove non-characters
+    .trim();
+
+  // Check length
+  if (sanitized.length > maxLength) {
+    throw new Error(`Input exceeds maximum length of ${maxLength} characters`);
+  }
+
+  // Check for dangerous patterns
+  const dangerousPatterns = [
+    /<script/i,
+    /javascript:/i,
+    /on\w+\s*=/i,
+    /__proto__/i,
+    /constructor/i,
+    /prototype/i
+  ];
+
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(sanitized)) {
+      throw new Error('Input contains potentially dangerous content');
+    }
+  }
+
+  return sanitized;
+}
+
+function validateDate(dateString: string): void {
+  // Validate ISO 8601 date format
+  const iso8601Regex = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{3})?(Z|[+-]\d{2}:\d{2})?)?$/;
+  if (!iso8601Regex.test(dateString)) {
+    throw new Error('Invalid date format. Please use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss)');
+  }
+}
+
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
@@ -257,18 +301,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       throw new Error('Tool arguments are required');
     }
 
+    // Prevent prototype pollution
+    if (args.__proto__ || args.constructor || args.prototype) {
+      throw new Error('Invalid arguments object');
+    }
+
     switch (name) {
       case 'exa_semantic_search': {
         if (!args.query || typeof args.query !== 'string') {
           throw new Error('query parameter is required and must be a string');
         }
-        
-        const result = await runSearchTask(args.query, {
-          searchType: args.searchType || 'neural',
-          numResults: args.numResults || 10,
-          includeContents: args.includeContents || false,
-          startDate: args.startDate,
-          endDate: args.endDate,
+
+        // Sanitize and validate inputs
+        const sanitizedQuery = sanitizeString(args.query, 5000);
+        const searchType = args.searchType && ['auto', 'keyword', 'neural', 'fast'].includes(args.searchType)
+          ? args.searchType
+          : 'neural';
+        const numResults = typeof args.numResults === 'number' && args.numResults >= 1 && args.numResults <= 50
+          ? args.numResults
+          : 10;
+        const includeContents = Boolean(args.includeContents);
+        const startDate = args.startDate ? (() => { validateDate(args.startDate); return args.startDate; })() : undefined;
+        const endDate = args.endDate ? (() => { validateDate(args.endDate); return args.endDate; })() : undefined;
+
+        const result = await runSearchTask(sanitizedQuery, {
+          searchType,
+          numResults,
+          includeContents,
+          startDate,
+          endDate,
           timeout: 30000,
           retries: 3,
           taskId: `mcp-search-${Date.now()}`,
@@ -288,9 +349,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!args.query || typeof args.query !== 'string') {
           throw new Error('query parameter is required and must be a string');
         }
-        
-        const result = await runContextTask(args.query, {
-          tokens: args.tokens || 5000,
+
+        // Sanitize and validate inputs
+        const sanitizedQuery = sanitizeString(args.query, 5000);
+        const tokens = typeof args.tokens === 'number' && args.tokens >= 100 && args.tokens <= 50000
+          ? args.tokens
+          : 5000;
+
+        const result = await runContextTask(sanitizedQuery, {
+          tokens,
           timeout: 30000,
           retries: 3,
           taskId: `mcp-research-${Date.now()}`,
@@ -421,10 +488,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!args.urls || !Array.isArray(args.urls)) {
           throw new Error('urls parameter is required and must be an array');
         }
-        
-        const result = await runContentsTask(args.urls, {
-          livecrawl: args.livecrawl || 'fallback',
-          subpages: args.subpages || 0,
+
+        if (args.urls.length === 0 || args.urls.length > 20) {
+          throw new Error('URLs array must contain between 1 and 20 URLs');
+        }
+
+        // Validate and sanitize URLs
+        const validUrls: string[] = [];
+        for (const url of args.urls) {
+          if (typeof url !== 'string') {
+            throw new Error('All URLs must be strings');
+          }
+
+          const sanitizedUrl = sanitizeString(url, 2048);
+
+          // Basic URL validation
+          try {
+            const urlObj = new URL(sanitizedUrl);
+            if (!['http:', 'https:'].includes(urlObj.protocol)) {
+              throw new Error('Only HTTP and HTTPS URLs are allowed');
+            }
+            validUrls.push(sanitizedUrl);
+          } catch {
+            throw new Error(`Invalid URL: ${sanitizedUrl}`);
+          }
+        }
+
+        const livecrawl = args.livecrawl && ['always', 'fallback', 'never'].includes(args.livecrawl)
+          ? args.livecrawl
+          : 'fallback';
+        const subpages = typeof args.subpages === 'number' && args.subpages >= 0 && args.subpages <= 20
+          ? args.subpages
+          : 0;
+
+        const result = await runContentsTask(validUrls, {
+          livecrawl,
+          subpages,
           timeout: 60000,
           retries: 3,
           taskId: `mcp-contents-${Date.now()}`,

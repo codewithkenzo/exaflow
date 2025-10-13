@@ -44,10 +44,20 @@ export function loadEnv(): Env {
   const result = envSchema.safeParse(process.env);
   
   if (!result.success) {
-    console.error('Environment validation failed:');
-    console.error('Available env vars:', Object.keys(process.env).filter(k => k.includes('EXA')));
-    console.error('Process env EXA_API_KEY:', process.env.EXA_API_KEY ? 'SET' : 'NOT SET');
+    // Secure logging - don't expose sensitive environment variables
     const errors = result.error.issues.map((err: any) => `${err.path.join('.')}: ${err.message}`).join(', ') || 'Unknown validation error';
+
+    // Log validation errors without exposing sensitive data
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Environment validation failed in development mode');
+      console.error('Validation errors:', errors);
+      // Only in development, show which env vars are expected (not their values)
+      console.error('Expected environment variables:', envSchema.keyof().options);
+    } else {
+      console.error('Environment configuration is invalid');
+      console.error('Please check your environment variables');
+    }
+
     throw new Error(`Environment validation failed: ${errors}`);
   }
 

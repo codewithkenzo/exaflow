@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "fs";
-import { join, dirname, resolve } from "path";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, realpathSync, statSync } from "fs";
+import { join, dirname, resolve, sep } from "path";
 import { z } from "zod";
 
 export interface FileReadOptions {
@@ -40,12 +40,51 @@ export class SandboxedFileSystem {
   }
 
   private validatePath(path: string): string {
+    // Reject obvious traversal attempts
+    if (path.includes('..') || path.includes('~')) {
+      throw new FileSystemError(
+        `Path traversal detected in ${path}`,
+        "PATH_TRAVERSAL",
+        path
+      );
+    }
+
+    // Reject null bytes and control characters
+    if (path.includes('\0') || /[\x00-\x1F\x7F]/.test(path)) {
+      throw new FileSystemError(
+        `Invalid characters in path ${path}`,
+        "INVALID_PATH",
+        path
+      );
+    }
+
     const resolvedPath = resolve(path);
-    
+
     // Check if the path is within allowed boundaries
     for (const allowedPath of this.allowedPaths) {
-      if (resolvedPath.startsWith(allowedPath)) {
-        return resolvedPath;
+      // Ensure both paths end with path separator for proper comparison
+      const normalizedAllowed = allowedPath.endsWith(sep) ? allowedPath : allowedPath + sep;
+      const normalizedResolved = resolvedPath.endsWith(sep) ? resolvedPath : resolvedPath + sep;
+
+      // Check that resolved path is within allowed boundary
+      if (normalizedResolved.startsWith(normalizedAllowed)) {
+        // Additional check: ensure we're not following symlinks outside allowed paths
+        try {
+          // This prevents symlink-based path traversal
+          const realPath = realpathSync(resolvedPath);
+          const normalizedReal = realPath.endsWith(sep) ? realPath : realPath + sep;
+
+          if (normalizedReal.startsWith(normalizedAllowed)) {
+            return resolvedPath;
+          }
+        } catch {
+          // If we can't resolve real path, err on side of caution
+          throw new FileSystemError(
+            `Cannot verify path safety: ${path}`,
+            "PATH_VERIFICATION_FAILED",
+            path
+          );
+        }
       }
     }
 
@@ -141,13 +180,13 @@ export class SandboxedFileSystem {
     const validatedPath = this.validatePath(path);
 
     try {
-      const stats = readFileSync(validatedPath);
-      
+      const stats = statSync(validatedPath);
+
       return {
         path: validatedPath,
-        size: 0, // We'd need fs.statSync for real size
-        isDirectory: false, // We'd need fs.statSync for real directory check
-        lastModified: new Date(),
+        size: stats.size,
+        isDirectory: stats.isDirectory(),
+        lastModified: stats.mtime,
       };
     } catch (error) {
       throw new FileSystemError(
@@ -196,10 +235,20 @@ export class SandboxedFileSystem {
   // Safe JSON operations
   async readJson<T>(path: string, schema?: z.ZodSchema<T>): Promise<T> {
     const content = await this.readFile(path);
-    
+
     try {
+      // Secure JSON parsing to prevent prototype pollution
+      if (content.trim().startsWith('__proto__') || content.includes('"__proto__"') ||
+          content.includes('"constructor"') || content.includes('"prototype"')) {
+        throw new FileSystemError(
+          'JSON contains potentially dangerous prototype pollution properties',
+          "PROTO_POLLUTION_DETECTED",
+          path
+        );
+      }
+
       const parsed = JSON.parse(content);
-      
+
       if (schema) {
         const result = schema.safeParse(parsed);
         if (!result.success) {
@@ -211,13 +260,13 @@ export class SandboxedFileSystem {
         }
         return result.data;
       }
-      
+
       return parsed as T;
     } catch (error) {
       if (error instanceof FileSystemError) {
         throw error;
       }
-      
+
       throw new FileSystemError(
         `Failed to parse JSON: ${error instanceof Error ? error.message : String(error)}`,
         "JSON_PARSE_ERROR",
@@ -308,26 +357,39 @@ export async function readStdin(): Promise<string> {
 
 export async function readStdinJson(): Promise<any[]> {
   const content = await readStdin();
-  
+
   if (!content.trim()) {
     return [];
   }
-  
+
   const lines = content.trim().split("\n");
   const results: any[] = [];
-  
+
   for (const line of lines) {
     if (line.trim()) {
       try {
-        results.push(JSON.parse(line));
+        // Secure JSON parsing to prevent prototype pollution
+        if (line.trim().startsWith('__proto__') || line.includes('"__proto__"') ||
+            line.includes('"constructor"') || line.includes('"prototype"')) {
+          throw new FileSystemError(
+            'JSON line contains potentially dangerous prototype pollution properties',
+            "PROTO_POLLUTION_DETECTED"
+          );
+        }
+
+        const parsed = JSON.parse(line);
+        results.push(parsed);
       } catch (error) {
+        if (error instanceof FileSystemError) {
+          throw error;
+        }
         throw new FileSystemError(
-          `Invalid JSON line in stdin: ${line}`,
+          `Invalid JSON line in stdin: ${line.substring(0, 100)}${line.length > 100 ? '...' : ''}`,
           "STDIN_JSON_ERROR"
         );
       }
     }
   }
-  
+
   return results;
 }

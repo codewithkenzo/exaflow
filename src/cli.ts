@@ -63,10 +63,24 @@ program
         // Start stdio transport server (default)
         console.error('Starting ExaFlow MCP server with stdio transport...');
         
-        // Execute the MCP server
+        // Execute the MCP server with hardcoded command to prevent injection
         const { spawn } = await import('child_process');
-        const mcpServer = spawn('bun', ['run', 'dist/mcp-server.js'], {
+
+        // Validate that we're using the expected hardcoded command
+        const command = 'bun';
+        const args = ['run', 'dist/mcp-server.js'];
+
+        // Additional security: sanitize and validate the command and args
+        if (command !== 'bun' || !Array.isArray(args) || args.length !== 3 ||
+            args[0] !== 'run' || !args[1].endsWith('mcp-server.js')) {
+          throw new Error('Invalid command execution attempted');
+        }
+
+        const mcpServer = spawn(command, args, {
           stdio: 'inherit',
+          // Add additional security options
+          shell: false,  // Explicitly disable shell to prevent injection
+          env: { ...process.env, NODE_ENV: process.env.NODE_ENV || 'production' },
         });
         
         mcpServer.on('error', (error) => {
@@ -404,7 +418,40 @@ program
 
         if (options.schema) {
           const schemaContent = await fs.readFile(options.schema);
-          outputSchema = JSON.parse(schemaContent);
+
+          // Secure JSON parsing to prevent prototype pollution
+          try {
+            // Validate JSON format before parsing
+            if (typeof schemaContent !== 'string' || schemaContent.trim().startsWith('__proto__')) {
+              throw new Error('Invalid schema file format');
+            }
+
+            // Parse JSON safely
+            const parsed = JSON.parse(schemaContent);
+
+            // Additional validation: ensure it's a valid JSON schema object
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+              throw new Error('Schema must be a valid JSON object');
+            }
+
+            // Check for dangerous prototype pollution patterns
+            const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+            const checkForDangerousKeys = (obj: any, path = '') => {
+              for (const key in obj) {
+                if (dangerousKeys.includes(key)) {
+                  throw new Error(`Dangerous key "${key}" found in schema at ${path}`);
+                }
+                if (obj[key] && typeof obj[key] === 'object') {
+                  checkForDangerousKeys(obj[key], `${path}.${key}`);
+                }
+              }
+            };
+            checkForDangerousKeys(parsed);
+
+            outputSchema = parsed;
+          } catch (parseError) {
+            throw new Error(`Failed to parse schema file: ${parseError instanceof Error ? parseError.message : 'Invalid JSON'}`);
+          }
         }
       }
 
