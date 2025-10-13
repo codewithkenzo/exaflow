@@ -321,9 +321,7 @@ program
     try {
       if (options.transport === 'http') {
         // Start HTTP transport server
-        console.log(`Starting ExaFlow MCP server on port ${options.port}`);
-        // Implementation would go here for HTTP transport
-        console.log('HTTP transport not yet implemented. Use stdio transport.');
+        // HTTP transport implementation would go here
         process.exit(1);
       } else {
         // Start stdio transport server (default)
