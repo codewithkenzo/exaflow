@@ -1,8 +1,7 @@
 import { z } from 'zod';
-import { httpClient } from '../util/http';
-import { createEventStreamer } from '../util/streaming';
-import { ResultEnvelope, WebsetTaskSchema, CitationSchema } from '../schema';
-import { getEnv } from '../env';
+import { BaseExaClient } from './base-client';
+import type { ResultEnvelope } from '../schema';
+import { WebsetTaskSchema, CitationSchema } from '../schema';
 
 // Websets API schemas
 const CreateWebsetRequestSchema = z.object({
@@ -100,16 +99,9 @@ export type WebsetSearch = z.infer<typeof WebsetSearchSchema>;
 export type WebsetItem = z.infer<typeof WebsetItemSchema>;
 export type WebsetEnrichmentRequest = z.infer<typeof WebsetEnrichmentRequestSchema>;
 
-export class ExaWebsetsClient {
-  private readonly apiKey?: string;
-  private readonly baseUrl = 'https://api.exa.ai';
-
+export class ExaWebsetsClient extends BaseExaClient {
   constructor(apiKey?: string) {
-    this.apiKey = apiKey;
-  }
-
-  private getApiKey(): string {
-    return this.apiKey || getEnv().EXA_API_KEY;
+    super(apiKey);
   }
 
   // Webset management
@@ -117,64 +109,45 @@ export class ExaWebsetsClient {
     request: CreateWebsetRequest = {},
     taskId?: string
   ): Promise<ResultEnvelope<z.infer<typeof CreateWebsetResponseSchema>>> {
-    const streamer = createEventStreamer(taskId || `webset-create-${Date.now()}`);
+    this.requireApiKey('Websets API');
+
+    const actualTaskId = this.getTaskId(taskId, 'webset-create');
+    const streamer = this.createStreamer(actualTaskId, 'websets');
     const startTime = Date.now();
 
     streamer.info('Creating webset', request);
 
-    try {
-      const response = await httpClient.post(`${this.baseUrl}/websets`, request, {
-        headers: {
-          Authorization: `Bearer ${this.getApiKey()}`,
-        },
-      });
-
-      const duration = Date.now() - startTime;
-      const validatedResponse = CreateWebsetResponseSchema.parse(response);
-
-      const result: ResultEnvelope<z.infer<typeof CreateWebsetResponseSchema>> = {
-        status: 'success',
-        taskId: taskId || `webset-create-${Date.now()}`,
-        timing: {
-          startedAt: new Date(startTime).toISOString(),
-          completedAt: new Date().toISOString(),
-          duration,
-        },
-        citations: [],
-        data: validatedResponse,
-      };
-
-      streamer.completed('webset-create', { websetId: validatedResponse.webset.id });
-      return result;
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-
-      streamer.failed(errorMessage, { duration });
-
-      return {
-        status: 'error',
-        taskId: taskId || `webset-create-${Date.now()}`,
-        timing: {
-          startedAt: new Date(startTime).toISOString(),
-          completedAt: new Date().toISOString(),
-          duration,
-        },
-        citations: [],
-        data: {
+    // Use base class executeRequest method
+    const result = await this.executeRequest(
+      'POST',
+      '/websets',
+      request,
+      CreateWebsetResponseSchema,
+      actualTaskId,
+      streamer,
+      startTime,
+      { useCache: false }, // Create requests should not be cached
+      {
+        errorCode: 'WEBSET_CREATE_ERROR',
+        errorPrefix: 'Websets Create API',
+        fallbackData: {
           webset: {
             id: '',
             status: 'failed' as const,
             createdAt: new Date().toISOString(),
             itemCount: 0,
           },
-        },
-        error: {
-          code: 'WEBSET_CREATE_ERROR',
-          message: errorMessage,
-        },
-      };
+        }
+      }
+    );
+
+    // If successful, log completion with specific details
+    if (result.status === 'success') {
+      streamer.completed('webset-create', { websetId: result.data.webset.id });
     }
+
+    // Return result as-is (base class already handles error formatting)
+    return result;
   }
 
   async createWebsetSearch(
@@ -182,58 +155,28 @@ export class ExaWebsetsClient {
     request: CreateWebsetSearchRequest,
     taskId?: string
   ): Promise<ResultEnvelope<z.infer<typeof CreateWebsetSearchResponseSchema>>> {
-    const streamer = createEventStreamer(taskId || `webset-search-${Date.now()}`);
+    this.requireApiKey('Websets API');
+
+    const actualTaskId = this.getTaskId(taskId, 'webset-search');
+    const streamer = this.createStreamer(actualTaskId, 'websets');
     const startTime = Date.now();
 
     streamer.info('Creating webset search', { websetId, ...request });
 
-    try {
-      const response = await httpClient.post(
-        `${this.baseUrl}/websets/${websetId}/searches`,
-        request,
-        {
-          headers: {
-            Authorization: `Bearer ${this.getApiKey()}`,
-          },
-        }
-      );
-
-      const duration = Date.now() - startTime;
-      const validatedResponse = CreateWebsetSearchResponseSchema.parse(response);
-
-      const result: ResultEnvelope<z.infer<typeof CreateWebsetSearchResponseSchema>> = {
-        status: 'success',
-        taskId: taskId || `webset-search-${Date.now()}`,
-        timing: {
-          startedAt: new Date(startTime).toISOString(),
-          completedAt: new Date().toISOString(),
-          duration,
-        },
-        citations: [],
-        data: validatedResponse,
-      };
-
-      streamer.completed('webset-search', {
-        websetId,
-        searchId: validatedResponse.search.id,
-      });
-      return result;
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-
-      streamer.failed(errorMessage, { duration });
-
-      return {
-        status: 'error',
-        taskId: taskId || `webset-search-${Date.now()}`,
-        timing: {
-          startedAt: new Date(startTime).toISOString(),
-          completedAt: new Date().toISOString(),
-          duration,
-        },
-        citations: [],
-        data: {
+    // Use base class executeRequest method
+    const result = await this.executeRequest(
+      'POST',
+      `/websets/${websetId}/searches`,
+      request,
+      CreateWebsetSearchResponseSchema,
+      actualTaskId,
+      streamer,
+      startTime,
+      { useCache: false }, // Search requests should not be cached
+      {
+        errorCode: 'WEBSET_SEARCH_ERROR',
+        errorPrefix: 'Websets Search API',
+        fallbackData: {
           search: {
             id: '',
             websetId: '',
@@ -242,13 +185,20 @@ export class ExaWebsetsClient {
             createdAt: new Date().toISOString(),
             resultCount: 0,
           },
-        },
-        error: {
-          code: 'WEBSET_SEARCH_ERROR',
-          message: errorMessage,
-        },
-      };
+        }
+      }
+    );
+
+    // If successful, log completion with specific details
+    if (result.status === 'success') {
+      streamer.completed('webset-search', {
+        websetId,
+        searchId: result.data.search.id,
+      });
     }
+
+    // Return result as-is (base class already handles error formatting)
+    return result;
   }
 
   async getWebsetItems(
@@ -260,7 +210,10 @@ export class ExaWebsetsClient {
     } = {},
     taskId?: string
   ): Promise<ResultEnvelope<z.infer<typeof ListWebsetItemsResponseSchema>>> {
-    const streamer = createEventStreamer(taskId || `webset-items-${Date.now()}`);
+    this.requireApiKey('Websets API');
+
+    const actualTaskId = this.getTaskId(taskId, 'webset-items');
+    const streamer = this.createStreamer(actualTaskId, 'websets');
     const startTime = Date.now();
 
     const params = new URLSearchParams({
@@ -274,18 +227,27 @@ export class ExaWebsetsClient {
 
     streamer.info('Fetching webset items', { websetId, options });
 
-    try {
-      const response = await httpClient.get(`${this.baseUrl}/websets/${websetId}/items?${params}`, {
-        headers: {
-          Authorization: `Bearer ${this.getApiKey()}`,
-        },
-      });
+    // Use base class executeRequest method
+    const result = await this.executeRequest(
+      'GET',
+      `/websets/${websetId}/items?${params}`,
+      null,
+      ListWebsetItemsResponseSchema,
+      actualTaskId,
+      streamer,
+      startTime,
+      { useCache: true }, // Get requests can benefit from caching
+      {
+        errorCode: 'WEBSET_ITEMS_ERROR',
+        errorPrefix: 'Websets Items API',
+        fallbackData: { items: [], total: 0, page: 1, pageSize: 50 }
+      }
+    );
 
-      const duration = Date.now() - startTime;
-      const validatedResponse = ListWebsetItemsResponseSchema.parse(response);
-
+    // If successful, create citations with verification reasoning and log completion
+    if (result.status === 'success') {
       // Map items to citations with verification reasoning
-      const citations = validatedResponse.items.map(item => ({
+      const citations = result.data.items.map(item => ({
         url: item.url,
         title: item.title,
         snippet: item.snippet,
@@ -294,46 +256,21 @@ export class ExaWebsetsClient {
         verificationReasoning: item.verificationReasoning,
       }));
 
-      const result: ResultEnvelope<z.infer<typeof ListWebsetItemsResponseSchema>> = {
-        status: 'success',
-        taskId: taskId || `webset-items-${Date.now()}`,
-        timing: {
-          startedAt: new Date(startTime).toISOString(),
-          completedAt: new Date().toISOString(),
-          duration,
-        },
-        citations,
-        data: validatedResponse,
-      };
-
       streamer.completed('webset-items', {
         websetId,
-        itemsCount: validatedResponse.items.length,
-        total: validatedResponse.total,
+        itemsCount: result.data.items.length,
+        total: result.data.total,
       });
-      return result;
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : String(error);
 
-      streamer.failed(errorMessage, { duration });
-
+      // Return result with citations
       return {
-        status: 'error',
-        taskId: taskId || `webset-items-${Date.now()}`,
-        timing: {
-          startedAt: new Date(startTime).toISOString(),
-          completedAt: new Date().toISOString(),
-          duration,
-        },
-        citations: [],
-        data: { items: [], total: 0, page: 1, pageSize: 50 },
-        error: {
-          code: 'WEBSET_ITEMS_ERROR',
-          message: errorMessage,
-        },
+        ...result,
+        citations,
       };
     }
+
+    // Return error result as-is (base class already handles error formatting)
+    return result;
   }
 
   async enrichItems(
@@ -341,67 +278,45 @@ export class ExaWebsetsClient {
     request: WebsetEnrichmentRequest,
     taskId?: string
   ): Promise<ResultEnvelope<{ message: string }>> {
-    const streamer = createEventStreamer(taskId || `webset-enrich-${Date.now()}`);
+    this.requireApiKey('Websets API');
+
+    const actualTaskId = this.getTaskId(taskId, 'webset-enrich');
+    const streamer = this.createStreamer(actualTaskId, 'websets');
     const startTime = Date.now();
 
     streamer.info('Enriching webset items', { websetId, ...request });
 
-    try {
-      const response = await httpClient.post(
-        `${this.baseUrl}/websets/${websetId}/enrichments`,
-        request,
-        {
-          headers: {
-            Authorization: `Bearer ${this.getApiKey()}`,
-          },
-        }
-      );
+    // Use base class executeRequest method
+    const result = await this.executeRequest(
+      'POST',
+      `/websets/${websetId}/enrichments`,
+      request,
+      z.object({ message: z.string() }),
+      actualTaskId,
+      streamer,
+      startTime,
+      { useCache: false }, // Enrichment requests should not be cached
+      {
+        errorCode: 'WEBSET_ENRICH_ERROR',
+        errorPrefix: 'Websets Enrichment API',
+        fallbackData: { message: 'Failed to start enrichment' }
+      }
+    );
 
-      const duration = Date.now() - startTime;
-
-      const result: ResultEnvelope<{ message: string }> = {
-        status: 'success',
-        taskId: taskId || `webset-enrich-${Date.now()}`,
-        timing: {
-          startedAt: new Date(startTime).toISOString(),
-          completedAt: new Date().toISOString(),
-          duration,
-        },
-        citations: [],
-        data: { message: 'Enrichment started successfully' },
-      };
-
+    // If successful, log completion with specific details
+    if (result.status === 'success') {
       streamer.completed('webset-enrich', {
         websetId,
         itemsCount: request.itemIds.length,
         enrichmentTypes: request.enrichmentTypes,
       });
-      return result;
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-
-      streamer.failed(errorMessage, { duration });
-
-      return {
-        status: 'error',
-        taskId: taskId || `webset-enrich-${Date.now()}`,
-        timing: {
-          startedAt: new Date(startTime).toISOString(),
-          completedAt: new Date().toISOString(),
-          duration,
-        },
-        citations: [],
-        data: { message: '' },
-        error: {
-          code: 'WEBSET_ENRICH_ERROR',
-          message: errorMessage,
-        },
-      };
     }
+
+    // Return result as-is (base class already handles error formatting)
+    return result;
   }
 
-  // Polling methods for async operations
+  // Polling methods for async operations using base class pollForCompletion
   async pollSearchCompletion(
     websetId: string,
     searchId: string,
@@ -409,116 +324,73 @@ export class ExaWebsetsClient {
     pollInterval: number = 5000, // 5 seconds
     taskId?: string
   ): Promise<ResultEnvelope<WebsetSearch>> {
-    const streamer = createEventStreamer(taskId || `webset-poll-${Date.now()}`);
+    this.requireApiKey('Websets API');
+
+    const actualTaskId = this.getTaskId(taskId, 'webset-poll');
+    const streamer = this.createStreamer(actualTaskId, 'websets');
     const startTime = Date.now();
-    let attempts = 0;
 
-    streamer.asyncStarted('webset-search-poll', maxWaitTime, { websetId, searchId });
-
-    while (Date.now() - startTime < maxWaitTime) {
-      attempts++;
-      streamer.asyncPolling('webset-search-poll', attempts);
-
-      try {
-        const response = await httpClient.get(
-          `${this.baseUrl}/websets/${websetId}/searches/${searchId}`,
+    // Use base class pollForCompletion method
+    return this.pollForCompletion(
+      // Poll function
+      async () => {
+        // Use base class executeRequest to get search status
+        const result = await this.executeRequest(
+          'GET',
+          `/websets/${websetId}/searches/${searchId}`,
+          null,
+          WebsetSearchSchema,
+          actualTaskId,
+          streamer,
+          startTime,
+          { useCache: true }, // Status checks can benefit from caching
           {
-            headers: {
-              Authorization: `Bearer ${this.getApiKey()}`,
-            },
+            errorCode: 'WEBSET_SEARCH_STATUS_ERROR',
+            errorPrefix: 'Websets Search Status API',
+            fallbackData: {
+              id: '',
+              websetId: '',
+              query: '',
+              status: 'failed' as const,
+              createdAt: new Date().toISOString(),
+              resultCount: 0,
+            }
           }
         );
 
-        const search = WebsetSearchSchema.parse(response);
-
-        if (search.status === 'completed') {
-          const duration = Date.now() - startTime;
-
-          const result: ResultEnvelope<WebsetSearch> = {
-            status: 'success',
-            taskId: taskId || `webset-poll-${Date.now()}`,
-            timing: {
-              startedAt: new Date(startTime).toISOString(),
-              completedAt: new Date().toISOString(),
-              duration,
-            },
-            citations: [],
-            data: search,
-          };
-
-          streamer.asyncCompleted('webset-search-poll', {
-            websetId,
-            searchId,
-            resultCount: search.resultCount,
-            attempts,
-          });
-          return result;
-        } else if (search.status === 'failed') {
-          throw new Error('Search failed');
+        if (result.status === 'error' || !result.data) {
+          throw new Error(result.error?.message || 'Failed to get search status');
         }
 
-        await new Promise(resolve => setTimeout(resolve, pollInterval));
-      } catch (error) {
-        const duration = Date.now() - startTime;
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const search = result.data;
 
-        streamer.failed(errorMessage, { duration, attempts });
+        if (search.status === 'completed') {
+          return { status: 'completed', data: search };
+        } else if (search.status === 'failed') {
+          return {
+            status: 'failed',
+            error: 'Search operation failed',
+            data: search
+          };
+        }
 
-        return {
-          status: 'error',
-          taskId: taskId || `webset-poll-${Date.now()}`,
-          timing: {
-            startedAt: new Date(startTime).toISOString(),
-            completedAt: new Date().toISOString(),
-            duration,
-          },
-          citations: [],
-          data: {
-            id: '',
-            websetId: '',
-            query: '',
-            status: 'failed' as const,
-            createdAt: new Date().toISOString(),
-            resultCount: 0,
-          },
-          error: {
-            code: 'WEBSET_POLL_ERROR',
-            message: errorMessage,
-          },
-        };
-      }
-    }
-
-    // Timeout
-    const duration = Date.now() - startTime;
-    streamer.failed('Polling timeout', { duration, attempts });
-
-    return {
-      status: 'error',
-      taskId: taskId || `webset-poll-${Date.now()}`,
-      timing: {
-        startedAt: new Date(startTime).toISOString(),
-        completedAt: new Date().toISOString(),
-        duration,
+        return { status: search.status };
       },
-      citations: [],
-      data: {
-        id: '',
-        websetId: '',
-        query: '',
-        status: 'failed' as const,
-        createdAt: new Date().toISOString(),
-        resultCount: 0,
-      },
-      error: {
-        code: 'POLLING_TIMEOUT',
-        message: `Search polling timed out after ${maxWaitTime}ms`,
-      },
-    };
+      // Completion check
+      (status) => status === 'completed',
+      // Failure check
+      (status) => status === 'failed',
+      actualTaskId,
+      streamer,
+      startTime,
+      maxWaitTime,
+      pollInterval,
+      'webset-search-completion-poll'
+    );
   }
 
   async executeTask(task: z.infer<typeof WebsetTaskSchema>): Promise<ResultEnvelope<any>> {
-    const validatedTask = WebsetTaskSchema.parse(task);
+    const validatedTask = this.validateTask(task, WebsetTaskSchema);
 
     switch (validatedTask.operation) {
       case 'create':

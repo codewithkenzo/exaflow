@@ -1,9 +1,7 @@
 import { z } from 'zod';
-import { httpClient } from '../util/http';
-import { createEventStreamer } from '../util/streaming';
+import { BaseExaClient } from './base-client';
 import type { ResultEnvelope } from '../schema';
 import { ContentsTaskSchema, CitationSchema } from '../schema';
-import { getEnv } from '../env';
 
 // Contents API request/response schemas
 const ContentsRequestSchema = z.object({
@@ -44,16 +42,9 @@ export type ContentsRequest = z.infer<typeof ContentsRequestSchema>;
 export type ContentResult = z.infer<typeof ContentResultSchema>;
 export type ContentsResponse = z.infer<typeof ContentsResponseSchema>;
 
-export class ExaContentsClient {
-  private readonly apiKey?: string;
-  private readonly baseUrl = 'https://api.exa.ai';
-
+export class ExaContentsClient extends BaseExaClient {
   constructor(apiKey?: string) {
-    this.apiKey = apiKey;
-  }
-
-  private getApiKey(): string {
-    return this.apiKey || getEnv().EXA_API_KEY;
+    super(apiKey);
   }
 
   async getContents(
@@ -66,7 +57,10 @@ export class ExaContentsClient {
     } = {},
     taskId?: string
   ): Promise<ResultEnvelope<ContentsResponse>> {
-    const streamer = createEventStreamer(taskId || `contents-${Date.now()}`);
+    this.requireApiKey('Contents API');
+
+    const actualTaskId = this.getTaskId(taskId, 'contents');
+    const streamer = this.createStreamer(actualTaskId, 'contents');
     const startTime = Date.now();
 
     const contentsOptions: ContentsRequest = {
@@ -82,36 +76,41 @@ export class ExaContentsClient {
       ...contentsOptions,
     });
 
-    try {
-      streamer.apiRequest('POST', '/contents', contentsOptions);
+    // Use base class executeRequest method
+    const result = await this.executeRequest(
+      'POST',
+      '/contents',
+      contentsOptions,
+      ContentsResponseSchema,
+      actualTaskId,
+      streamer,
+      startTime,
+      { useCache: true }, // Contents requests can benefit from caching
+      {
+        errorCode: 'CONTENTS_API_ERROR',
+        errorPrefix: 'Contents API',
+        fallbackData: { results: [] }
+      }
+    );
 
-      const response = await httpClient.post(`${this.baseUrl}/contents`, contentsOptions, {
-        headers: {
-          Authorization: `Bearer ${this.getApiKey()}`,
-        },
-      });
-
-      const duration = Date.now() - startTime;
-      streamer.apiResponse('POST', '/contents', 200, duration);
-
-      const validatedResponse = ContentsResponseSchema.parse(response);
-
+    // If successful, add citations and log completion
+    if (result.status === 'success') {
       // Map results to citations (including subpages)
       const citations: z.infer<typeof CitationSchema>[] = [];
 
-      validatedResponse.results.forEach(result => {
+      result.data.results.forEach(resultItem => {
         // Main content citation
         citations.push({
-          url: result.url,
-          title: result.title,
-          author: result.author,
-          publishedDate: result.publishedDate,
-          snippet: result.text ? result.text.slice(0, 500) + '...' : undefined,
+          url: resultItem.url,
+          title: resultItem.title,
+          author: resultItem.author,
+          publishedDate: resultItem.publishedDate,
+          snippet: resultItem.text ? resultItem.text.slice(0, 500) + '...' : undefined,
         });
 
         // Subpage citations
-        if (result.subpages) {
-          result.subpages.forEach(subpage => {
+        if (resultItem.subpages) {
+          resultItem.subpages.forEach(subpage => {
             citations.push({
               url: subpage.url,
               title: subpage.title,
@@ -121,57 +120,32 @@ export class ExaContentsClient {
         }
       });
 
-      const result: ResultEnvelope<ContentsResponse> = {
-        status: 'success',
-        taskId: taskId || `contents-${Date.now()}`,
-        timing: {
-          startedAt: new Date(startTime).toISOString(),
-          completedAt: new Date().toISOString(),
-          duration,
-        },
-        citations,
-        data: validatedResponse,
-      };
-
-      const totalSubpages = validatedResponse.results.reduce(
-        (sum, result) => sum + (result.subpages?.length || 0),
+      const totalSubpages = result.data.results.reduce(
+        (sum, resultItem) => sum + (resultItem.subpages?.length || 0),
         0
       );
 
       streamer.completed('contents', {
-        resultsCount: validatedResponse.results.length,
+        resultsCount: result.data.results.length,
         totalSubpages,
         citationsCount: citations.length,
       });
-      return result;
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : String(error);
 
-      streamer.failed(errorMessage, { duration });
-
+      // Return result with citations
       return {
-        status: 'error',
-        taskId: taskId || `contents-${Date.now()}`,
-        timing: {
-          startedAt: new Date(startTime).toISOString(),
-          completedAt: new Date().toISOString(),
-          duration,
-        },
-        citations: [],
-        data: { results: [] },
-        error: {
-          code: 'CONTENTS_API_ERROR',
-          message: errorMessage,
-        },
+        ...result,
+        citations,
       };
     }
+
+    // Return error result as-is
+    return result;
   }
 
   async executeTask(
     task: z.infer<typeof ContentsTaskSchema>
   ): Promise<ResultEnvelope<ContentsResponse>> {
-    const validatedTask = ContentsTaskSchema.parse(task);
+    const validatedTask = this.validateTask(task, ContentsTaskSchema);
 
     return this.getContents(
       validatedTask.ids,
@@ -239,7 +213,9 @@ export class ExaContentsClient {
     > = {},
     taskId?: string
   ): Promise<ResultEnvelope<ContentsResponse>> {
-    const streamer = createEventStreamer(taskId || `contents-targeted-${Date.now()}`);
+    const actualTaskId = this.getTaskId(taskId, 'contents-targeted');
+    const streamer = this.createStreamer(actualTaskId, 'contents');
+
     streamer.info('Extracting targeted sections', {
       urlsCount: urls.length,
       targetSections,
@@ -254,7 +230,7 @@ export class ExaContentsClient {
         subpages: maxSubpages,
         subpageTarget: targetSections,
       },
-      taskId
+      actualTaskId
     );
   }
 }

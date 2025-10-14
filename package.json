@@ -1,7 +1,7 @@
 {
   "name": "exaflow",
-  "version": "2.0.0",
-  "description": "ExaFlow: Advanced Semantic Search Tool with MCP Server Integration",
+  "version": "2.1.0",
+  "description": "🚀 Advanced semantic search & AI integration toolkit with Exa API and MCP server support",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
@@ -19,17 +19,26 @@
     "test:unit": "bun test tests/unit/",
     "test:integration": "bun test tests/integration/",
     "test:e2e": "bun test tests/e2e/",
+    "test:workflows": "bun test tests/e2e/workflow-tests.test.ts",
+    "test:integration:cli": "bun test tests/integration/cli-integration.test.ts",
+    "test:integration:mcp": "bun test tests/integration/mcp-server-integration.test.ts",
     "test:ci": "bun test --coverage --bail",
     "test:performance": "bun test tests/performance/",
     "test:perf:cache": "bun test tests/performance/http-cache.performance.test.ts",
+    "test:perf:memory": "bun test tests/performance/memory-leak.test.ts",
+    "test:perf:network": "bun test tests/performance/network-stress.test.ts",
     "test:perf:benchmark": "bun test tests/performance/ --reporter=verbose",
+    "test:security": "bun test tests/security/",
+    "test:security:input": "bun test tests/security/input-validation.test.ts",
+    "test:security:basic": "bun test tests/security/security.test.ts",
+    "test:cross-platform": "bun test tests/cross-platform/",
+    "test:advanced": "bun test tests/security/ tests/performance/memory-leak.test.ts tests/performance/network-stress.test.ts tests/cross-platform/",
+    "test:all": "bun test tests/unit/ tests/integration/ tests/e2e/ tests/security/ tests/performance/ tests/cross-platform/",
     "typecheck": "tsc --noEmit",
     "lint": "bunx tsc --noEmit && bun test",
     "format": "bunx prettier --write \"src/**/*.{ts,js}\" \"tests/**/*.{ts,js}\"",
     "format:check": "bunx prettier --check \"src/**/*.{ts,js}\" \"tests/**/*.{ts,js}\"",
     "clean": "rm -rf dist coverage",
-    "cleanup": "node scripts/cleanup.js",
-    "cleanup:history": "node scripts/cleanup.js --history",
     "start": "bun run dist/cli.js",
     "start:mcp": "bun run dist/mcp-server.js",
     "precommit": "bun run typecheck && bun run lint && bun run test:ci"
@@ -53,13 +62,43 @@
     "exaflow",
     "search",
     "semantic",
+    "neural",
     "mcp",
     "context",
     "research",
     "websets",
     "cli",
-    "typescript"
+    "typescript",
+    "ai",
+    "llm",
+    "content-extraction",
+    "api-client"
   ],
-  "author": "ExaFlow",
-  "license": "MIT"
+  "author": {
+    "name": "ExaFlow",
+    "email": "support@exaflow.dev",
+    "url": "https://github.com/codewithkenzo/exa-personal-tool"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codewithkenzo/exa-personal-tool.git"
+  },
+  "bugs": {
+    "url": "https://github.com/codewithkenzo/exa-personal-tool/issues"
+  },
+  "homepage": "https://github.com/codewithkenzo/exa-personal-tool#readme",
+  "engines": {
+    "node": ">=18.0.0",
+    "bun": ">=1.0.0"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }
