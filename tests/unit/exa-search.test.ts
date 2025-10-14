@@ -141,7 +141,7 @@ describe('ExaSearchClient', () => {
       const result = await client.search('test query');
 
       expect(result.status).toBe('success');
-      expect(result.taskId).toMatch(/^search-\d+$/);
+      expect(result.taskId).toMatch(/^search-\d+-\d+$/);
     });
 
     it('should handle search API errors gracefully', async () => {

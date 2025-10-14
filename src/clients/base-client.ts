@@ -24,6 +24,7 @@ export interface ApiRequestOptions {
 export abstract class BaseExaClient {
   protected readonly apiKey?: string;
   protected readonly baseUrl = 'https://api.exa.ai';
+  private static taskIdCounter = 0;
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey;
@@ -282,7 +283,13 @@ export abstract class BaseExaClient {
    * Get a default task ID if none provided
    */
   protected getTaskId(taskId?: string, prefix?: string): string {
-    return taskId || `${prefix || 'task'}-${Date.now()}`;
+    if (taskId) {
+      return taskId;
+    }
+
+    // Use counter to ensure uniqueness even for rapid calls
+    BaseExaClient.taskIdCounter++;
+    return `${prefix || 'task'}-${Date.now()}-${BaseExaClient.taskIdCounter}`;
   }
 
   /**

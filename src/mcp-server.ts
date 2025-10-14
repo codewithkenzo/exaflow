@@ -18,7 +18,7 @@ loadEnv();
 const server = new Server(
   {
     name: 'exaflow',
-    version: '2.0.0',
+    version: '2.1.1',
   },
   {
     capabilities: {
@@ -596,13 +596,81 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
   }
 });
 
+// HTTP Server implementation for testing
+async function startHttpServer(port: number) {
+  const { createServer } = await import('http');
+
+  const httpServer = createServer(async (req, res) => {
+    // Enable CORS
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(200);
+      res.end();
+      return;
+    }
+
+    if (req.method !== 'POST') {
+      res.writeHead(405);
+      res.end('Method Not Allowed');
+      return;
+    }
+
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+
+    req.on('end', async () => {
+      try {
+        const request = JSON.parse(body);
+        const response = await server.request(request, {
+          signal: AbortSignal.timeout(30000),
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(response));
+      } catch (error) {
+        console.error('HTTP MCP Error:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          jsonrpc: '2.0',
+          error: {
+            code: -32603,
+            message: 'Internal error',
+            data: error instanceof Error ? error.message : String(error)
+          }
+        }));
+      }
+    });
+  });
+
+  return new Promise<void>((resolve, reject) => {
+    httpServer.listen(port, () => {
+      console.error(`ExaFlow MCP server running on HTTP port ${port}`);
+      resolve();
+    }).on('error', reject);
+  });
+}
+
 // Start the server
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  const args = process.argv.slice(2);
+  const portIndex = args.indexOf('--port');
+  const httpMode = portIndex !== -1;
 
-  if (process.env.NODE_ENV !== 'production') {
-    console.error('ExaFlow MCP server running on stdio');
+  if (httpMode) {
+    const port = parseInt(args[portIndex + 1]) || 3000;
+    await startHttpServer(port);
+  } else {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('ExaFlow MCP server running on stdio');
+    }
   }
 }
 

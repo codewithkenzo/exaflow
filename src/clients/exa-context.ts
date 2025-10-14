@@ -33,7 +33,8 @@ export class ExaContextClient extends BaseExaClient {
     taskId?: string
   ): Promise<ResultEnvelope<ContextResponse>> {
     this.requireApiKey('Context API');
-    const streamer = this.createStreamer(taskId, 'context');
+    const finalTaskId = this.getTaskId(taskId, 'context');
+    const streamer = this.createStreamer(finalTaskId, 'context');
     const startTime = Date.now();
 
     streamer.info('Starting Context API request', { query, tokensNum });
@@ -44,7 +45,7 @@ export class ExaContextClient extends BaseExaClient {
       '/context',
       { query, tokensNum },
       ContextResponseSchema,
-      this.getTaskId(taskId, 'context'),
+      finalTaskId,
       streamer,
       startTime,
       undefined,
@@ -83,10 +84,11 @@ export class ExaContextClient extends BaseExaClient {
       taskId?: string;
     } = {}
   ): Promise<ResultEnvelope<ContextResponse>> {
+    const finalTaskId = this.getTaskId(options.taskId, 'context-query');
     return this.getContext(
       query,
       options.tokens || 5000,
-      this.getTaskId(options.taskId, 'context-query')
+      finalTaskId
     );
   }
 }

@@ -42,7 +42,8 @@ describe('MCP Server Integration Tests', () => {
 
       serverProcess.stdout?.on('data', (data) => {
         stdout += data.toString();
-        if (stdout.includes('MCP server listening') || stdout.includes('Server started')) {
+        // Look for our specific startup message
+        if (stdout.includes(`ExaFlow MCP server running on HTTP port ${port}`)) {
           serverReady = true;
           resolve({ process: serverProcess, port });
         }
@@ -57,18 +58,18 @@ describe('MCP Server Integration Tests', () => {
         resolve({ process: null, port });
       });
 
-      // Timeout after 10 seconds
+      // Timeout after 5 seconds instead of 10
       setTimeout(() => {
         if (!serverReady) {
           console.log('MCP Server startup timeout - proceeding with tests');
           resolve({ process: serverProcess, port });
         }
-      }, 10000);
+      }, 5000);
     });
   };
 
   const makeMCPRequest = async (port: number, request: any): Promise<any> => {
-    const response = await fetch(`http://localhost:${port}/mcp`, {
+    const response = await fetch(`http://localhost:${port}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

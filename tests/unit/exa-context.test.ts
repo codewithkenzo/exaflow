@@ -138,7 +138,7 @@ describe('ExaContextClient', () => {
       const result = await client.getContext('test query');
 
       expect(result.status).toBe('success');
-      expect(result.taskId).toMatch(/^context-\d+$/);
+      expect(result.taskId).toMatch(/^context-\d+-\d+$/);
     });
 
     it('should handle responses without sources', async () => {
@@ -228,7 +228,7 @@ describe('ExaContextClient', () => {
 
       expect(result.status).toBe('success');
       expect(result.data.response).toBe('Simple query response');
-      expect(result.taskId).toMatch(/^context-query-\d+$/);
+      expect(result.taskId).toMatch(/^context-query-\d+-\d+$/);
     });
 
     it('should accept custom options', async () => {
@@ -328,8 +328,8 @@ describe('ExaContextClient', () => {
       const result1 = await client.getContext('test query');
       const result2 = await client.getContext('test query');
 
-      expect(result1.taskId).toMatch(/^context-\d+$/);
-      expect(result2.taskId).toMatch(/^context-\d+$/);
+      expect(result1.taskId).toMatch(/^context-\d+-\d+$/);
+      expect(result2.taskId).toMatch(/^context-\d+-\d+$/);
       expect(result1.taskId).not.toBe(result2.taskId);
     });
   });

@@ -54,7 +54,7 @@ describe('BaseExaClient', () => {
 
     it('should generate task ID when not provided', () => {
       const taskId = client.getTaskId(undefined, 'test');
-      expect(taskId).toMatch(/^test-\d+$/);
+      expect(taskId).toMatch(/^test-\d+-\d+$/);
     });
 
     it('should generate unique task IDs', async () => {

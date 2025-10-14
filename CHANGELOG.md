@@ -5,6 +5,25 @@ All notable changes to ExaFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2024-10-14
+
+### 🐛 Bug Fixes
+- **MCP Server Startup**: Fixed HTTP server mode for reliable MCP server startup in tests
+- **Task ID Generation**: Fixed static counter to ensure unique task IDs across rapid consecutive calls
+- **Test Suite Reliability**: Updated test patterns to match new task ID format (`prefix-timestamp-counter`)
+- **Integration Test Stability**: Reduced MCP server startup timeout from 10s to 5s for faster test execution
+
+### 🔧 Technical Improvements
+- **BaseExaClient Counter**: Added static task ID counter to prevent collisions in high-frequency scenarios
+- **HTTP Transport**: Enhanced MCP server with dual transport support (stdio + HTTP)
+- **Test Performance**: Improved test execution speed and reliability
+
+### 📊 Quality
+- **86 Unit Tests Passing**: All unit tests now pass with updated task ID patterns
+- **MCP Integration**: Fixed MCP server test integration for continuous compatibility
+
+---
+
 ## [2.1.0] - 2024-10-14
 
 ### 🚀 Major Features
