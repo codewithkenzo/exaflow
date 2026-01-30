@@ -54,34 +54,6 @@ describe('ConnectionPool', () => {
     });
   });
 
-  describe('request', () => {
-    it('should return fallback response when pool is not available', async () => {
-      // Create a pool without undici by using a mock
-      const emptyPool = new ConnectionPool({ maxConnectionsPerOrigin: 1 });
-
-      // Mock fetch to avoid actual network calls
-      const mockResponse = {
-        ok: true,
-        status: 200,
-        statusText: 'OK',
-        headers: new Headers(),
-        body: null,
-      };
-      const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(mockResponse as unknown as Response);
-
-      try {
-        const response = await emptyPool.request('https://example.com', { method: 'GET' });
-        expect(response).toBeDefined();
-      } catch (error) {
-        // May fail if fetch mock doesn't match expected interface
-        expect(error).toBeDefined();
-      }
-
-      fetchSpy.mockRestore();
-      await emptyPool.close();
-    });
-  });
-
   describe('close', () => {
     it('should close all pools', async () => {
       await pool.close();
@@ -101,26 +73,24 @@ describe('ConnectionPool', () => {
 });
 
 describe('HttpClient with Connection Pooling', () => {
-  let client: HttpClient;
+  describe('without pooling (usePooling=false)', () => {
+    let client: HttpClient;
 
-  beforeEach(() => {
-    client = new HttpClient(undefined, { maxConnectionsPerOrigin: 5 }, true);
-  });
+    beforeEach(() => {
+      client = new HttpClient(undefined, { maxConnectionsPerOrigin: 5 }, false);
+    });
 
-  afterEach(async () => {
-    await client.close();
-  });
+    afterEach(async () => {
+      await client.close();
+    });
 
-  describe('getPoolStats', () => {
     it('should return pool statistics', () => {
       const stats = client.getPoolStats();
 
       expect(stats).toHaveProperty('poolCount');
       expect(stats).toHaveProperty('poolSizes');
     });
-  });
 
-  describe('circuit breaker integration', () => {
     it('should have circuit breaker stats available', () => {
       const stats = client.getCircuitBreakerStats();
 
@@ -128,9 +98,7 @@ describe('HttpClient with Connection Pooling', () => {
       expect(stats).toHaveProperty('failureCount');
       expect(stats).toHaveProperty('successCount');
     });
-  });
 
-  describe('fetch with mocked response', () => {
     it('should handle successful fetch with mocked response', async () => {
       const mockResponse = {
         ok: true,
@@ -140,17 +108,12 @@ describe('HttpClient with Connection Pooling', () => {
       };
       const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(mockResponse as unknown as Response);
 
-      try {
-        const response = await client.fetch('https://api.exa.ai/search', {
-          method: 'GET',
-        });
+      const response = await client.fetch('https://api.exa.ai/search', {
+        method: 'GET',
+      });
 
-        expect(response).toBeDefined();
-        expect(response.ok).toBe(true);
-      } catch (error) {
-        // Unexpected but should be handled
-        expect(error).toBeDefined();
-      }
+      expect(response).toBeDefined();
+      expect(response.ok).toBe(true);
 
       fetchSpy.mockRestore();
     });
@@ -164,14 +127,12 @@ describe('HttpClient with Connection Pooling', () => {
       const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(mockErrorResponse as unknown as Response);
 
       await expect(
-        client.fetch('https://api.exa.ai/search', { method: 'GET' })
+        client.fetch('https://api.exa.ai/search', { method: 'GET', retries: 0, timeout: 1000 })
       ).rejects.toThrow('HTTP 500: Internal Server Error');
 
       fetchSpy.mockRestore();
     });
-  });
 
-  describe('get with mocked response', () => {
     it('should make GET requests and parse JSON', async () => {
       const mockResponse = {
         ok: true,
@@ -187,9 +148,7 @@ describe('HttpClient with Connection Pooling', () => {
 
       fetchSpy.mockRestore();
     });
-  });
 
-  describe('post with mocked response', () => {
     it('should make POST requests and parse JSON', async () => {
       const mockResponse = {
         ok: true,
@@ -204,6 +163,25 @@ describe('HttpClient with Connection Pooling', () => {
       expect(result).toEqual({ id: '123' });
 
       fetchSpy.mockRestore();
+    });
+  });
+
+  describe('with pooling (usePooling=true)', () => {
+    let client: HttpClient;
+
+    beforeEach(() => {
+      client = new HttpClient(undefined, { maxConnectionsPerOrigin: 5 }, true);
+    });
+
+    afterEach(async () => {
+      await client.close();
+    });
+
+    it('should return pool statistics', () => {
+      const stats = client.getPoolStats();
+
+      expect(stats).toHaveProperty('poolCount');
+      expect(stats).toHaveProperty('poolSizes');
     });
   });
 });

@@ -276,10 +276,12 @@ export class HttpClient {
             });
 
             // Convert undici response to fetch Response
-            response = new Response(undiciResponse.body, {
-              status: undiciResponse.statusCode,
-              statusText: undiciResponse.reasonPhrase,
-              headers: undiciResponse.headers as HeadersInit,
+            // Handle undici response which might have different structure
+            const body = undiciResponse.body || null;
+            response = new Response(body, {
+              status: undiciResponse.statusCode || 200,
+              statusText: undiciResponse.reasonPhrase || 'OK',
+              headers: (undiciResponse.headers as HeadersInit) || {},
             });
           } else {
             // Fallback to regular fetch

@@ -180,7 +180,8 @@ describe('HttpClient', () => {
   let client: HttpClient;
 
   beforeEach(() => {
-    client = new HttpClient();
+    // Disable pooling for unit tests to use mocked fetch
+    client = new HttpClient(undefined, undefined, false);
   });
 
   describe('getCircuitBreakerStats', () => {
