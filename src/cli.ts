@@ -253,26 +253,18 @@ async function parseSchemaFile(schemaFile: string): Promise<Record<string, unkno
   }
 
   try {
-    const parsed = JSON.parse(schemaContent);
+    // Use reviver function to block prototype pollution at parse time
+    const parsed = JSON.parse(schemaContent, (key, value) => {
+      if (['__proto__', 'constructor', 'prototype'].includes(key)) {
+        throw new Error(`Dangerous key "${key}" blocked by JSON.parse reviver`);
+      }
+      return value;
+    });
 
     // Validate it's a valid JSON schema object
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new Error('Schema must be a valid JSON object');
     }
-
-    // Check for dangerous prototype pollution patterns
-    const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
-    const checkForDangerousKeys = (obj: Record<string, unknown>, path = '') => {
-      for (const key in obj) {
-        if (dangerousKeys.includes(key)) {
-          throw new Error(`Dangerous key "${key}" found in schema at ${path}`);
-        }
-        if (obj[key] && typeof obj[key] === 'object') {
-          checkForDangerousKeys(obj[key] as Record<string, unknown>, `${path}.${key}`);
-        }
-      }
-    };
-    checkForDangerousKeys(parsed);
 
     return parsed;
   } catch (parseError) {

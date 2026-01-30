@@ -662,9 +662,9 @@ function validateToolArgs(args: Record<string, any>): void {
   }
 
   if (
-    args.hasOwnProperty('__proto__') ||
-    args.hasOwnProperty('constructor') ||
-    args.hasOwnProperty('prototype')
+    Object.prototype.hasOwnProperty.call(args, '__proto__') ||
+    Object.prototype.hasOwnProperty.call(args, 'constructor') ||
+    Object.prototype.hasOwnProperty.call(args, 'prototype')
   ) {
     throw new Error('Invalid arguments object');
   }

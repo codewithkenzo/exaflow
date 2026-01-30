@@ -70,7 +70,7 @@ export class SandboxedFileSystem {
       if (normalizedResolved.startsWith(normalizedAllowed)) {
         // Additional check: ensure we're not following symlinks outside allowed paths
         try {
-          // This prevents symlink-based path traversal
+          // For existing files, check the file's real path
           const realPath = realpathSync(resolvedPath);
           const normalizedReal = realPath.endsWith(sep) ? realPath : realPath + sep;
 
@@ -78,10 +78,26 @@ export class SandboxedFileSystem {
             return resolvedPath;
           }
         } catch {
-          // If we can't resolve real path, err on side of caution
-          // Check if the original resolved path is within allowed boundaries
-          if (normalizedResolved.startsWith(normalizedAllowed)) {
-            return resolvedPath;
+          // If file doesn't exist yet (e.g., write operation), check parent directory
+          // This prevents symlink-based path traversal for new files
+          const parentPath = dirname(resolvedPath);
+          try {
+            const parentRealPath = realpathSync(parentPath);
+            const normalizedParentReal = parentRealPath.endsWith(sep) ? parentRealPath : parentRealPath + sep;
+
+            if (normalizedParentReal.startsWith(normalizedAllowed)) {
+              return resolvedPath;
+            }
+          } catch {
+            // If parent also doesn't exist or can't be resolved, check original path
+            if (normalizedResolved.startsWith(normalizedAllowed)) {
+              return resolvedPath;
+            }
+            throw new FileSystemError(
+              `Cannot verify path safety: ${path}`,
+              'PATH_VERIFICATION_FAILED',
+              path
+            );
           }
           throw new FileSystemError(
             `Cannot verify path safety: ${path}`,

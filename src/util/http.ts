@@ -299,8 +299,33 @@ export class HttpClient {
 
             // Convert undici response to fetch Response
             // Handle undici response which might have different structure
-            const responseBody = undiciResponse.body ?? null;
-            response = new Response(responseBody as BodyInit | null, {
+            const undiciBody = undiciResponse.body ?? null;
+            
+            // Safely convert undici body to fetch BodyInit
+            let responseBody: BodyInit | null = null;
+            if (undiciBody !== null) {
+              if (typeof undiciBody === 'string') {
+                responseBody = undiciBody;
+              } else if (undiciBody instanceof Uint8Array) {
+                responseBody = new ReadableStream({
+                  start(controller) {
+                    controller.enqueue(undiciBody);
+                    controller.close();
+                  }
+                });
+              } else if (Buffer.isBuffer(undiciBody)) {
+                responseBody = new ReadableStream({
+                  start(controller) {
+                    controller.enqueue(new Uint8Array(undiciBody));
+                    controller.close();
+                  }
+                });
+              } else {
+                responseBody = null;
+              }
+            }
+            
+            response = new Response(responseBody, {
               status: undiciResponse.statusCode || 200,
               statusText: undiciResponse.reasonPhrase || 'OK',
               headers: (undiciResponse.headers as HeadersInit) || {},

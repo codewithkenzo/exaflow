@@ -302,8 +302,33 @@ export class CachedHttpClient {
         });
 
         // Handle undici response which might have different structure
-        const body = undiciResponse.body ?? null;
-        response = new Response(body as BodyInit | null, {
+        const undiciBody = undiciResponse.body ?? null;
+        
+        // Safely convert undici body to fetch BodyInit
+        let body: BodyInit | null = null;
+        if (undiciBody !== null) {
+          if (typeof undiciBody === 'string') {
+            body = undiciBody;
+          } else if (undiciBody instanceof Uint8Array) {
+            body = new ReadableStream({
+              start(controller) {
+                controller.enqueue(undiciBody);
+                controller.close();
+              }
+            });
+          } else if (Buffer.isBuffer(undiciBody)) {
+            body = new ReadableStream({
+              start(controller) {
+                controller.enqueue(new Uint8Array(undiciBody));
+                controller.close();
+              }
+            });
+          } else {
+            body = null;
+          }
+        }
+        
+        response = new Response(body, {
           status: undiciResponse.statusCode || 200,
           statusText: undiciResponse.reasonPhrase || 'OK',
           headers: (undiciResponse.headers as HeadersInit) || {},
