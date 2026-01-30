@@ -10,6 +10,25 @@ export interface HttpOptions {
  */
 export type HttpResponseData = unknown;
 
+/**
+ * Type for undici Pool
+ */
+interface PoolInstance {
+  request: (options: {
+    method: string;
+    headers?: Record<string, string>;
+    body?: string;
+    signal?: AbortSignal;
+  }) => Promise<{
+    body: unknown;
+    statusCode: number;
+    reasonPhrase: string;
+    headers: Record<string, string>;
+  }>;
+  close: () => Promise<void>;
+  size?: number;
+}
+
 // Connection pool configuration
 export interface PoolConfig {
   /** Maximum number of connections per origin */
@@ -34,7 +53,7 @@ const DEFAULT_POOL_CONFIG: PoolConfig = {
  * Connection Pool Manager using undici for efficient HTTP connection pooling
  */
 export class ConnectionPool {
-  private pool: Map<string, unknown> = new Map(); // Using unknown for undici Pool type
+  private pool: Map<string, PoolInstance> = new Map();
   private config: PoolConfig;
 
   constructor(config: PoolConfig = {}) {
@@ -44,26 +63,24 @@ export class ConnectionPool {
   /**
    * Get or create a connection pool for a specific origin
    */
-  private getPool(origin: string): unknown {
+  private getPool(origin: string): PoolInstance | null {
     if (!this.pool.has(origin)) {
       // Dynamic import to avoid issues in environments without undici
-      let Pool: unknown;
       try {
         const undici = require('undici');
-        Pool = new undici.Pool(origin, {
+        const newPool: PoolInstance = new undici.Pool(origin, {
           connections: this.config.maxConnectionsPerOrigin,
           timeout: this.config.connectionTimeout,
           keepAlive: true,
         });
+        this.pool.set(origin, newPool);
       } catch {
         // Fallback if undici is not available
         return null;
       }
-
-      this.pool.set(origin, Pool);
     }
 
-    return this.pool.get(origin);
+    return this.pool.get(origin) ?? null;
   }
 
   /**
@@ -77,7 +94,7 @@ export class ConnectionPool {
       body?: string;
       signal?: AbortSignal;
     } = {}
-  ): Promise<any> {
+  ): Promise<unknown> {
     const pool = this.getPool(new URL(url).origin);
 
     if (!pool) {
@@ -103,7 +120,7 @@ export class ConnectionPool {
    */
   async close(): Promise<void> {
     for (const pool of this.pool.values()) {
-      if (pool && typeof pool.close === 'function') {
+      if (pool) {
         await pool.close();
       }
     }
@@ -118,7 +135,7 @@ export class ConnectionPool {
 
     for (const [origin, pool] of this.pool.entries()) {
       // Try to get pool size if available
-      sizes[origin] = pool?.size || 0;
+      sizes[origin] = pool.size ?? 0;
     }
 
     return {
@@ -273,12 +290,17 @@ export class HttpClient {
               headers: requestHeaders,
               body,
               signal: controller.signal,
-            });
+            }) as {
+              body: unknown;
+              statusCode: number;
+              reasonPhrase: string;
+              headers: Record<string, string>;
+            };
 
             // Convert undici response to fetch Response
             // Handle undici response which might have different structure
-            const body = undiciResponse.body || null;
-            response = new Response(body, {
+            const responseBody = undiciResponse.body ?? null;
+            response = new Response(responseBody as BodyInit | null, {
               status: undiciResponse.statusCode || 200,
               statusText: undiciResponse.reasonPhrase || 'OK',
               headers: (undiciResponse.headers as HeadersInit) || {},

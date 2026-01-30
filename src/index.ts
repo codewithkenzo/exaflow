@@ -1,4 +1,5 @@
-import { EnhancedTask, ResultEnvelope } from './schema';
+import { z } from 'zod';
+import { EnhancedTask, ResultEnvelope, ContextTaskSchema, SearchTaskSchema, ContentsTaskSchema, WebsetTaskSchema, ResearchTaskSchema } from './schema';
 import { executeWithOrdering } from './util/concurrency';
 import { createEventStreamer, streamResult } from './util/streaming';
 import { loadEnv } from './env';
@@ -21,23 +22,28 @@ export async function runTask(task: EnhancedTask): Promise<ResultEnvelope> {
 
   try {
     switch (task.type) {
-      case 'context':
-        return await exaContextClient.executeTask(task);
-
-      case 'search':
-        return await exaSearchClient.executeTask(task);
-
-      case 'contents':
-        return await exaContentsClient.executeTask(task);
-
-      case 'websets':
-        return await exaWebsetsClient.executeTask(task);
-
-      case 'research':
-        return await exaResearchClient.executeTask(task);
-
+      case 'context': {
+        const contextTask = task as z.infer<typeof ContextTaskSchema> & { timeout: number; retries: number };
+        return await exaContextClient.executeTask(contextTask);
+      }
+      case 'search': {
+        const searchTask = task as z.infer<typeof SearchTaskSchema> & { timeout: number; retries: number };
+        return await exaSearchClient.executeTask(searchTask);
+      }
+      case 'contents': {
+        const contentsTask = task as z.infer<typeof ContentsTaskSchema> & { timeout: number; retries: number };
+        return await exaContentsClient.executeTask(contentsTask);
+      }
+      case 'websets': {
+        const websetTask = task as z.infer<typeof WebsetTaskSchema> & { timeout: number; retries: number };
+        return await exaWebsetsClient.executeTask(websetTask);
+      }
+      case 'research': {
+        const researchTask = task as z.infer<typeof ResearchTaskSchema> & { timeout: number; retries: number };
+        return await exaResearchClient.executeTask(researchTask);
+      }
       default:
-        throw new Error(`Unknown task type: ${(task as any).type}`);
+        throw new Error(`Unknown task type: ${(task as EnhancedTask).type}`);
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

@@ -45,7 +45,7 @@ const WebsetSearchSchema = z.object({
   status: z.enum(['pending', 'running', 'completed', 'failed']),
   createdAt: z.string().datetime(),
   completedAt: z.string().datetime().optional(),
-  resultCount: z.number().default(0),
+  resultCount: z.number().optional(),
 });
 
 const WebsetItemSchema = z.object({
@@ -286,12 +286,15 @@ export class ExaWebsetsClient extends BaseExaClient {
 
     streamer.info('Enriching webset items', { websetId, ...request });
 
+    // Define the response schema
+    const EnrichResponseSchema = z.object({ message: z.string() });
+
     // Use base class executeRequest method
     const result = await this.executeRequest(
       'POST',
       `/websets/${websetId}/enrichments`,
       request,
-      z.object({ message: z.string() }),
+      EnrichResponseSchema,
       actualTaskId,
       streamer,
       startTime,

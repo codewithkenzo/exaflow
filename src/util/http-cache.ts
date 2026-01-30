@@ -109,7 +109,7 @@ export class HttpCache {
   /**
    * Get cached response
    */
-  get(url: string, data?: unknown): unknown | null {
+  get<T>(url: string, data?: unknown): T | null {
     if (!this.config.enabled) {
       return null;
     }
@@ -122,7 +122,7 @@ export class HttpCache {
       return null;
     }
 
-    return entry.data;
+    return entry.data as T;
   }
 
   /**
@@ -281,8 +281,8 @@ export class CachedHttpClient {
    */
   async get<T>(url: string, options?: HttpOptions): Promise<T> {
     // Check cache first
-    const cached = this.cache.get(url);
-    if (cached) {
+    const cached = this.cache.get<T>(url);
+    if (cached !== null) {
       return cached;
     }
 
@@ -302,8 +302,8 @@ export class CachedHttpClient {
         });
 
         // Handle undici response which might have different structure
-        const body = undiciResponse.body || null;
-        response = new Response(body, {
+        const body = undiciResponse.body ?? null;
+        response = new Response(body as BodyInit | null, {
           status: undiciResponse.statusCode || 200,
           statusText: undiciResponse.reasonPhrase || 'OK',
           headers: (undiciResponse.headers as HeadersInit) || {},
@@ -364,8 +364,8 @@ export class CachedHttpClient {
     const isIdempotent = this.isIdempotentRequest(url, data);
 
     if (isIdempotent) {
-      const cached = this.cache.get(url, data);
-      if (cached) {
+      const cached = this.cache.get<T>(url, data);
+      if (cached !== null) {
         return cached;
       }
     }
@@ -388,8 +388,8 @@ export class CachedHttpClient {
         });
 
         // Handle undici response which might have different structure
-        const body = undiciResponse.body || null;
-        response = new Response(body, {
+        const body = undiciResponse.body ?? null;
+        response = new Response(body as BodyInit | null, {
           status: undiciResponse.statusCode || 200,
           statusText: undiciResponse.reasonPhrase || 'OK',
           headers: (undiciResponse.headers as HeadersInit) || {},
