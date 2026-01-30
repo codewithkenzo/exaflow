@@ -405,7 +405,8 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
           throw new Error('query parameter is required and must be a string');
         }
 
-        let enhancedQuery = typedArgs.query;
+        // Sanitize query first
+        let enhancedQuery = sanitizeString(typedArgs.query, 5000);
 
         if (typedArgs.includeProfiles) {
           enhancedQuery += ' site:linkedin.com';
@@ -415,8 +416,10 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
           enhancedQuery += ' company OR corporation OR startup';
         }
 
+        // Sanitize location before concatenation to prevent injection
         if (typedArgs.location) {
-          enhancedQuery += ` ${typedArgs.location}`;
+          const sanitizedLocation = sanitizeString(typedArgs.location, 500);
+          enhancedQuery += ` ${sanitizedLocation}`;
         }
 
         const result = await runSearchTask(enhancedQuery, {
@@ -439,7 +442,8 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
       }
 
       case 'exa_code_discovery': {
-        let enhancedQuery = typedArgs.query;
+        // Sanitize query first
+        let enhancedQuery = sanitizeString(typedArgs.query, 5000);
 
         if (typedArgs.repositories) {
           enhancedQuery += ' site:github.com OR site:gitlab.com';
@@ -449,8 +453,10 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
           enhancedQuery += ' documentation OR tutorial OR guide';
         }
 
+        // Sanitize language before concatenation to prevent injection
         if (typedArgs.language) {
-          enhancedQuery += ` ${typedArgs.language} programming`;
+          const sanitizedLanguage = sanitizeString(typedArgs.language, 100);
+          enhancedQuery += ` ${sanitizedLanguage} programming`;
         }
 
         const result = await runSearchTask(enhancedQuery, {
@@ -473,22 +479,29 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
       }
 
       case 'exa_knowledge_graph': {
-        let enhancedQuery = typedArgs.query;
-        const sources = Array.isArray(typedArgs.sources) ? typedArgs.sources : ['wikipedia'];
+        // Sanitize query first
+        let enhancedQuery = sanitizeString(typedArgs.query, 5000);
 
-        if (sources.includes('wikipedia')) {
+        // Sanitize and validate sources array
+        const rawSources = Array.isArray(typedArgs.sources) ? typedArgs.sources : ['wikipedia'];
+        const allowedSources = ['wikipedia', 'government', 'educational', 'news'];
+        const sanitizedSources = rawSources
+          .filter(source => typeof source === 'string' && allowedSources.includes(source))
+          .map(source => sanitizeString(source, 100));
+
+        if (sanitizedSources.includes('wikipedia')) {
           enhancedQuery += ' site:wikipedia.org';
         }
 
-        if (sources.includes('government')) {
+        if (sanitizedSources.includes('government')) {
           enhancedQuery += ' site:.gov';
         }
 
-        if (sources.includes('educational')) {
+        if (sanitizedSources.includes('educational')) {
           enhancedQuery += ' site:.edu OR educational';
         }
 
-        if (sources.includes('news')) {
+        if (sanitizedSources.includes('news')) {
           enhancedQuery += ' news OR encyclopedia';
         }
 
