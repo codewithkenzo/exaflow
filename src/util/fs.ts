@@ -79,6 +79,10 @@ export class SandboxedFileSystem {
           }
         } catch {
           // If we can't resolve real path, err on side of caution
+          // Check if the original resolved path is within allowed boundaries
+          if (normalizedResolved.startsWith(normalizedAllowed)) {
+            return resolvedPath;
+          }
           throw new FileSystemError(
             `Cannot verify path safety: ${path}`,
             'PATH_VERIFICATION_FAILED',

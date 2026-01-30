@@ -42,7 +42,7 @@ export const ResultEnvelopeSchema = z.object({
     .optional(),
 });
 
-export type ResultEnvelope<T = any> = z.infer<typeof ResultEnvelopeSchema> & {
+export type ResultEnvelope<T = unknown> = z.infer<typeof ResultEnvelopeSchema> & {
   data: T;
 };
 

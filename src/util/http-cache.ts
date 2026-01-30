@@ -11,6 +11,17 @@ interface HttpOptions {
   signal?: AbortSignal;
 }
 
+// Import connection pool for HTTP/2 support and connection pooling
+let Pool: any;
+try {
+  Pool = require('undici').Pool;
+} catch {
+  Pool = null;
+}
+
+// Global connection pool instance
+const globalPool = Pool ? new Pool('https://api.exa.ai', { connections: 10 }) : null;
+
 interface CacheEntry {
   data: any;
   timestamp: number;
@@ -221,9 +232,11 @@ export const httpCache = new HttpCache();
  */
 export class CachedHttpClient {
   private cache: HttpCache;
+  private pool: any;
 
   constructor(cache?: HttpCache) {
     this.cache = cache || httpCache;
+    this.pool = globalPool;
   }
 
   /**
@@ -236,15 +249,36 @@ export class CachedHttpClient {
       return cached;
     }
 
-    // Make actual request
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'ExaFlow/2.0.0',
-        ...options?.headers,
-      },
-      signal: options?.signal,
-    });
+    // Make actual request using connection pool
+    let response: Response;
+
+    if (this.pool) {
+      const undiciResponse = await this.pool.request({
+        method: 'GET',
+        path: new URL(url).pathname,
+        headers: {
+          'User-Agent': 'ExaFlow/2.0.0',
+          ...options?.headers,
+        },
+        signal: options?.signal,
+      });
+
+      response = new Response(undiciResponse.body, {
+        status: undiciResponse.statusCode,
+        statusText: undiciResponse.reasonPhrase,
+        headers: undiciResponse.headers as HeadersInit,
+      });
+    } else {
+      // Fallback to regular fetch
+      response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'ExaFlow/2.0.0',
+          ...options?.headers,
+        },
+        signal: options?.signal,
+      });
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -285,16 +319,40 @@ export class CachedHttpClient {
       }
     }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'ExaFlow/2.0.0',
-        ...options?.headers,
-      },
-      body: data ? JSON.stringify(data) : undefined,
-      signal: options?.signal,
-    });
+    // Make actual request using connection pool
+    let response: Response;
+
+    if (this.pool) {
+      const undiciResponse = await this.pool.request({
+        method: 'POST',
+        path: new URL(url).pathname,
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'ExaFlow/2.0.0',
+          ...options?.headers,
+        },
+        body: data ? JSON.stringify(data) : undefined,
+        signal: options?.signal,
+      });
+
+      response = new Response(undiciResponse.body, {
+        status: undiciResponse.statusCode,
+        statusText: undiciResponse.reasonPhrase,
+        headers: undiciResponse.headers as HeadersInit,
+      });
+    } else {
+      // Fallback to regular fetch
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'ExaFlow/2.0.0',
+          ...options?.headers,
+        },
+        body: data ? JSON.stringify(data) : undefined,
+        signal: options?.signal,
+      });
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -345,6 +403,16 @@ export class CachedHttpClient {
    */
   cleanup(): void {
     this.cache.cleanup();
+  }
+
+  /**
+   * Get connection pool statistics
+   */
+  getPoolStats(): { available: boolean; poolSize?: number } {
+    return {
+      available: !!this.pool,
+      poolSize: this.pool?.size || 0,
+    };
   }
 }
 

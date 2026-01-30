@@ -5,6 +5,139 @@ export interface HttpOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * Type for HTTP response data
+ */
+export type HttpResponseData = unknown;
+
+// Connection pool configuration
+export interface PoolConfig {
+  /** Maximum number of connections per origin */
+  maxConnectionsPerOrigin?: number;
+  /** Connection timeout in milliseconds */
+  connectionTimeout?: number;
+  /** Keep alive timeout in milliseconds */
+  keepAliveTimeout?: number;
+  /** Maximum idle connections per origin */
+  maxIdleConnections?: number;
+}
+
+// Default pool configuration
+const DEFAULT_POOL_CONFIG: PoolConfig = {
+  maxConnectionsPerOrigin: 10,
+  connectionTimeout: 10000,
+  keepAliveTimeout: 60000,
+  maxIdleConnections: 5,
+};
+
+/**
+ * Connection Pool Manager using undici for efficient HTTP connection pooling
+ */
+export class ConnectionPool {
+  private pool: Map<string, unknown> = new Map(); // Using unknown for undici Pool type
+  private config: PoolConfig;
+
+  constructor(config: PoolConfig = {}) {
+    this.config = { ...DEFAULT_POOL_CONFIG, ...config };
+  }
+
+  /**
+   * Get or create a connection pool for a specific origin
+   */
+  private getPool(origin: string): unknown {
+    if (!this.pool.has(origin)) {
+      // Dynamic import to avoid issues in environments without undici
+      let Pool: unknown;
+      try {
+        const undici = require('undici');
+        Pool = new undici.Pool(origin, {
+          connections: this.config.maxConnectionsPerOrigin,
+          timeout: this.config.connectionTimeout,
+          keepAlive: true,
+        });
+      } catch {
+        // Fallback if undici is not available
+        return null;
+      }
+
+      this.pool.set(origin, Pool);
+    }
+
+    return this.pool.get(origin);
+  }
+
+  /**
+   * Execute a request using connection pooling
+   */
+  async request(
+    url: string,
+    options: {
+      method?: string;
+      headers?: Record<string, string>;
+      body?: string;
+      signal?: AbortSignal;
+    } = {}
+  ): Promise<any> {
+    const pool = this.getPool(new URL(url).origin);
+
+    if (!pool) {
+      // Fallback to regular fetch if pool is not available
+      return fetch(url, {
+        method: options.method || 'GET',
+        headers: options.headers,
+        body: options.body,
+        signal: options.signal,
+      });
+    }
+
+    return pool.request({
+      method: options.method || 'GET',
+      headers: options.headers,
+      body: options.body,
+      signal: options.signal,
+    });
+  }
+
+  /**
+   * Close all pools and clear the pool map
+   */
+  async close(): Promise<void> {
+    for (const pool of this.pool.values()) {
+      if (pool && typeof pool.close === 'function') {
+        await pool.close();
+      }
+    }
+    this.pool.clear();
+  }
+
+  /**
+   * Get pool statistics
+   */
+  getStats(): { poolCount: number; poolSizes: Record<string, number> } {
+    const sizes: Record<string, number> = {};
+
+    for (const [origin, pool] of this.pool.entries()) {
+      // Try to get pool size if available
+      sizes[origin] = pool?.size || 0;
+    }
+
+    return {
+      poolCount: this.pool.size,
+      poolSizes: sizes,
+    };
+  }
+
+  /**
+   * Get the current configuration
+   */
+  getConfig(): PoolConfig {
+    return { ...this.config };
+  }
+}
+
+// Global connection pool instance
+export const connectionPool = new ConnectionPool();
+
 export interface CircuitBreakerOptions {
   failureThreshold: number;
   resetTimeout: number;
@@ -82,14 +215,22 @@ export class CircuitBreaker {
 
 export class HttpClient {
   private circuitBreaker: CircuitBreaker;
+  private pool: ConnectionPool;
+  private usePooling: boolean;
 
-  constructor(circuitBreakerOptions?: Partial<CircuitBreakerOptions>) {
+  constructor(
+    circuitBreakerOptions?: Partial<CircuitBreakerOptions>,
+    poolConfig?: PoolConfig,
+    usePooling: boolean = true
+  ) {
     this.circuitBreaker = new CircuitBreaker({
       failureThreshold: 5,
       resetTimeout: 60000, // 1 minute
       monitoringPeriod: 300000, // 5 minutes
       ...circuitBreakerOptions,
     });
+    this.pool = new ConnectionPool(poolConfig);
+    this.usePooling = usePooling;
   }
 
   async fetch(
@@ -117,16 +258,42 @@ export class HttpClient {
         }
 
         try {
-          const response = await fetch(url, {
-            method,
-            headers: {
+          let response: Response;
+
+          if (this.usePooling) {
+            // Use connection pooling
+            const requestHeaders = {
               'Content-Type': 'application/json',
               'User-Agent': 'exa-personal-tool/1.0.0',
               ...headers,
-            },
-            body,
-            signal: controller.signal,
-          });
+            };
+
+            const undiciResponse = await this.pool.request(url, {
+              method,
+              headers: requestHeaders,
+              body,
+              signal: controller.signal,
+            });
+
+            // Convert undici response to fetch Response
+            response = new Response(undiciResponse.body, {
+              status: undiciResponse.statusCode,
+              statusText: undiciResponse.reasonPhrase,
+              headers: undiciResponse.headers as HeadersInit,
+            });
+          } else {
+            // Fallback to regular fetch
+            response = await fetch(url, {
+              method,
+              headers: {
+                'Content-Type': 'application/json',
+                'User-Agent': 'exa-personal-tool/1.0.0',
+                ...headers,
+              },
+              body,
+              signal: controller.signal,
+            });
+          }
 
           clearTimeout(timeoutId);
 
@@ -154,7 +321,7 @@ export class HttpClient {
     });
   }
 
-  async post<T = any>(url: string, data: any, options: HttpOptions = {}): Promise<T> {
+  async post<T>(url: string, data: unknown, options: HttpOptions = {}): Promise<T> {
     const response = await this.fetch(url, {
       ...options,
       method: 'POST',
@@ -164,7 +331,7 @@ export class HttpClient {
     return response.json() as Promise<T>;
   }
 
-  async get<T = any>(url: string, options: HttpOptions = {}): Promise<T> {
+  async get<T>(url: string, options: HttpOptions = {}): Promise<T> {
     const response = await this.fetch(url, {
       ...options,
       method: 'GET',
@@ -175,6 +342,17 @@ export class HttpClient {
 
   getCircuitBreakerStats() {
     return this.circuitBreaker.getStats();
+  }
+
+  getPoolStats() {
+    return this.pool.getStats();
+  }
+
+  /**
+   * Close the connection pool
+   */
+  async close(): Promise<void> {
+    await this.pool.close();
   }
 }
 

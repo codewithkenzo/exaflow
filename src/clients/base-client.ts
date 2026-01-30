@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { httpClient } from '../util/http';
 import { cachedHttpClient } from '../util/http-cache';
 import { createEventStreamer, EventStreamer } from '../util/streaming';
-import type { ResultEnvelope, CitationSchema } from '../schema';
+import type { ResultEnvelope, CitationSchema, EnhancedTask } from '../schema';
 import { getEnv } from '../env';
 
 /**
@@ -296,5 +296,5 @@ export abstract class BaseExaClient {
    * Abstract method that each client must implement
    * to execute their specific task type
    */
-  abstract executeTask(task: any): Promise<ResultEnvelope<any>>;
+  abstract executeTask(task: EnhancedTask): Promise<ResultEnvelope<unknown>>;
 }
