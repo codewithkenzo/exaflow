@@ -46,7 +46,8 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "^24.7.1",
-    "prettier": "^3.0.0"
+    "prettier": "^3.0.0",
+    "vitest": "^4.0.18"
   },
   "peerDependencies": {
     "typescript": "^5"
