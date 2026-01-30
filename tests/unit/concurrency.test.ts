@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'bun/test';
+import { describe, it, expect, beforeEach } from 'vitest';
 
 import { ConcurrencyPool, executeWithConcurrency, executeWithOrdering } from '../../src/util/concurrency';
 import type { EnhancedTask } from '../../src/schema';
