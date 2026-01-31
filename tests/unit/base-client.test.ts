@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, mock, spyOn } from 'bun:test';
 import { BaseExaClient } from '../../src/clients/base-client';
 
-// Mock environment
-const mockGetEnv = mock(() => ({ EXA_API_KEY: 'test-api-key' }));
-const mockLoadEnv = mock(() => ({ EXA_API_KEY: 'test-api-key' }));
+// Mock environment for tests - no real API keys needed
+const mockGetEnv = mock(() => ({}));
+const mockLoadEnv = mock(() => ({}));
 
 // We can't easily mock ESM modules in bun, so we'll test what we can
 describe('BaseExaClient', () => {
