@@ -738,10 +738,7 @@ function readRequestBody(req: any): Promise<string> {
  */
 async function processMcpRequest(body: string): Promise<any> {
   const request = JSON.parse(body);
-  const options = {
-    signal: AbortSignal.timeout(30000),
-  } as any;
-  return server.request(request, options);
+  return server.request(request, { signal: AbortSignal.timeout(30000) });
 }
 
 /**
