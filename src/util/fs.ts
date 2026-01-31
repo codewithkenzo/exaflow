@@ -6,6 +6,7 @@ import {
   readdirSync,
   realpathSync,
   statSync,
+  lstatSync,
 } from 'fs';
 import { join, dirname, resolve, sep } from 'path';
 import { z } from 'zod';
@@ -48,17 +49,25 @@ export class SandboxedFileSystem {
   }
 
   private validatePath(path: string): string {
+    // Decode URL-encoded paths to prevent bypass via encoding
+    let decodedPath = path;
+    try {
+      decodedPath = decodeURIComponent(path);
+    } catch {
+      // If decoding fails, use original path (will be caught by other checks)
+    }
+
     // Reject obvious traversal attempts
-    if (path.includes('..') || path.includes('~')) {
+    if (decodedPath.includes('..') || decodedPath.includes('~')) {
       throw new FileSystemError(`Path traversal detected in ${path}`, 'PATH_TRAVERSAL', path);
     }
 
     // Reject null bytes and control characters
-    if (path.includes('\0') || /[\x00-\x1F\x7F]/.test(path)) {
+    if (decodedPath.includes('\0') || /[\x00-\x1F\x7F]/.test(decodedPath)) {
       throw new FileSystemError(`Invalid characters in path ${path}`, 'INVALID_PATH', path);
     }
 
-    const resolvedPath = resolve(path);
+    const resolvedPath = resolve(decodedPath);
 
     // Check if the path is within allowed boundaries
     for (const allowedPath of this.allowedPaths) {
@@ -68,34 +77,32 @@ export class SandboxedFileSystem {
 
       // Check that resolved path is within allowed boundary
       if (normalizedResolved.startsWith(normalizedAllowed)) {
-        // Additional check: ensure we're not following symlinks outside allowed paths
-        try {
-          // For existing files, check the file's real path
-          const realPath = realpathSync(resolvedPath);
-          const normalizedReal = realPath.endsWith(sep) ? realPath : realPath + sep;
-
-          if (normalizedReal.startsWith(normalizedAllowed)) {
-            return resolvedPath;
-          }
-        } catch {
-          // If file doesn't exist yet (e.g., write operation), check parent directory
-          // This prevents symlink-based path traversal for new files
-          const parentPath = dirname(resolvedPath);
+        // For existing files, check symlinks don't point outside
+        if (existsSync(resolvedPath)) {
           try {
-            const parentRealPath = realpathSync(parentPath);
-            const normalizedParentReal = parentRealPath.endsWith(sep) ? parentRealPath : parentRealPath + sep;
-
-            if (normalizedParentReal.startsWith(normalizedAllowed)) {
-              return resolvedPath;
+            const stats = lstatSync(resolvedPath);
+            if (stats.isSymbolicLink()) {
+              // Symlinks must be resolved and checked
+              const realPath = realpathSync(resolvedPath);
+              const normalizedReal = realPath.endsWith(sep) ? realPath : realPath + sep;
+              if (!normalizedReal.startsWith(normalizedAllowed)) {
+                throw new FileSystemError(
+                  `Symbolic link points outside allowed directory`,
+                  'SYMLINK_VIOLATION',
+                  path
+                );
+              }
             }
           } catch {
-          // If parent also doesn't exist or can't be resolved, reject for safety
-          throw new FileSystemError(
-            `Cannot verify path safety: ${path}`,
-            'PATH_VERIFICATION_FAILED',
-            path
-          );
+            // If we can't verify symlink, throw error
+            throw new FileSystemError(
+              `Cannot verify path safety: ${path}`,
+              'PATH_VERIFICATION_FAILED',
+              path
+            );
+          }
         }
+        return resolvedPath;
       }
     }
 
