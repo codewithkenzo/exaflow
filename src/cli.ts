@@ -247,13 +247,22 @@ async function processInputFileQueries(
 async function parseSchemaFile(schemaFile: string): Promise<Record<string, unknown>> {
   const schemaContent = await fs.readFile(schemaFile);
 
+  // Pre-validate JSON string for dangerous keys before parsing
+  if (
+    schemaContent.includes('"__proto__"') ||
+    schemaContent.includes('"constructor"') ||
+    schemaContent.includes('"prototype"')
+  ) {
+    throw new Error('Schema contains potentially dangerous prototype pollution properties');
+  }
+
   // Validate JSON format before parsing
   if (typeof schemaContent !== 'string' || schemaContent.trim().startsWith('__proto__')) {
     throw new Error('Invalid schema file format');
   }
 
   try {
-    // Use reviver function to block prototype pollution at parse time
+    // Use reviver function as additional safety layer
     const parsed = JSON.parse(schemaContent, (key, value) => {
       if (['__proto__', 'constructor', 'prototype'].includes(key)) {
         throw new Error(`Dangerous key "${key}" blocked by JSON.parse reviver`);

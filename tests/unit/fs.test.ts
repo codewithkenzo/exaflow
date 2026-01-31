@@ -91,7 +91,7 @@ describe('SandboxedFileSystem', () => {
     });
 
     it('should reject files exceeding max size', async () => {
-      const largeContent = 'x'.repeat(2000);
+      const largeContent = 'x'.repeat(1024 * 1024 + 1);
       writeFileSync(testFilePath, largeContent);
       await expect(sandbox.readFile(testFilePath)).rejects.toThrow(FileSystemError);
     });
