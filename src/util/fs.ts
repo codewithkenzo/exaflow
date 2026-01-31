@@ -99,6 +99,7 @@ export class SandboxedFileSystem {
               path
             );
           }
+          // If we get here, parent validation succeeded but parentRealPath wasn't in allowed directory
           throw new FileSystemError(
             `Cannot verify path safety: ${path}`,
             'PATH_VERIFICATION_FAILED',
