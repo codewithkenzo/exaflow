@@ -89,17 +89,7 @@ export class SandboxedFileSystem {
               return resolvedPath;
             }
           } catch {
-            // If parent also doesn't exist or can't be resolved, check original path
-            if (normalizedResolved.startsWith(normalizedAllowed)) {
-              return resolvedPath;
-            }
-            throw new FileSystemError(
-              `Cannot verify path safety: ${path}`,
-              'PATH_VERIFICATION_FAILED',
-              path
-            );
-          }
-          // If we get here, parent validation succeeded but parentRealPath wasn't in allowed directory
+          // If parent also doesn't exist or can't be resolved, reject for safety
           throw new FileSystemError(
             `Cannot verify path safety: ${path}`,
             'PATH_VERIFICATION_FAILED',
