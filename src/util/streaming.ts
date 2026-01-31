@@ -3,6 +3,69 @@ import type { EventEnvelope } from '../schema';
 // Type for event metadata
 type EventMeta = Record<string, unknown>;
 
+// Sensitive environment variables that should never be logged
+const SENSITIVE_ENV_VARS = new Set([
+  'EXA_API_KEY',
+  'WEBHOOK_SECRET',
+  'API_KEY',
+  'SECRET',
+  'TOKEN',
+  'PASSWORD',
+  'CREDENTIAL',
+  'AUTH',
+]);
+
+/**
+ * Redacts sensitive values from objects to prevent env var leakage in logs
+ */
+function redactSensitiveValues(obj: unknown): unknown {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+
+  if (typeof obj === 'string') {
+    // Check if string looks like a sensitive value
+    if (obj.length > 8 && !obj.includes(' ') && /^[a-zA-Z0-9\-_.]+$/.test(obj)) {
+      return '[REDACTED]';
+    }
+    return obj;
+  }
+
+  if (typeof obj === 'object' && !Array.isArray(obj)) {
+    const redacted: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      const lowerKey = key.toUpperCase();
+      
+      // Check if key matches any sensitive pattern
+      const isSensitiveKey = Array.from(SENSITIVE_ENV_VARS).some(
+        sensitive => lowerKey.includes(sensitive.toLowerCase())
+      );
+
+      if (isSensitiveKey) {
+        redacted[key] = '[REDACTED]';
+      } else if (typeof value === 'object' && value !== null) {
+        redacted[key] = redactSensitiveValues(value);
+      } else {
+        redacted[key] = value;
+      }
+    }
+    return redacted;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(item => redactSensitiveValues(item));
+  }
+
+  return obj;
+}
+
+/**
+ * Checks if we're running in production environment
+ */
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
 export class EventStreamer {
   private taskId: string;
 
@@ -32,8 +95,13 @@ export class EventStreamer {
   }
 
   private sendEvent(event: EventEnvelope): void {
+    // Redact sensitive values before logging
+    const safeEvent = {
+      ...event,
+      meta: event.meta ? redactSensitiveValues(event.meta) as EventMeta : undefined,
+    };
     // Send to stderr as JSONL
-    console.error(JSON.stringify(event));
+    console.error(JSON.stringify(safeEvent));
   }
 
   debug(message: string, meta?: EventMeta): void {
@@ -136,7 +204,7 @@ export class EventStreamer {
   asyncCompleted(operation: string, result: unknown, meta?: EventMeta): void {
     this.info(`Async operation completed: ${operation}`, {
       operation,
-      result,
+      result: redactSensitiveValues(result),
       ...meta,
     });
   }
@@ -145,7 +213,7 @@ export class EventStreamer {
   webhookReceived(eventType: string, payload: unknown, meta?: EventMeta): void {
     this.info(`Webhook received: ${eventType}`, {
       eventType,
-      payload,
+      payload: redactSensitiveValues(payload),
       ...meta,
     });
   }
@@ -195,12 +263,47 @@ export function createEventStreamer(taskId: string): EventStreamer {
 // Global event streamer for operations without specific task ID
 export const globalEventStreamer = new EventStreamer('global');
 
-// Utility function to stream results to stdout
+/**
+ * Safely streams results to stdout, redacting any sensitive values
+ */
 export function streamResult<T>(result: T): void {
-  console.log(JSON.stringify(result, null, 2));
+  const safeResult = redactSensitiveValues(result);
+  console.log(JSON.stringify(safeResult, null, 2));
 }
 
-// Utility function to stream results as compact JSON
+/**
+ * Safely streams results as compact JSON, redacting any sensitive values
+ */
 export function streamResultCompact<T>(result: T): void {
-  console.log(JSON.stringify(result));
+  const safeResult = redactSensitiveValues(result);
+  console.log(JSON.stringify(safeResult));
 }
+
+/**
+ * Safe logging wrapper that respects production environment
+ */
+export const safeLogger = {
+  log: (...args: unknown[]): void => {
+    if (!isProduction()) {
+      const safeArgs = args.map(arg => redactSensitiveValues(arg));
+      console.log(...safeArgs);
+    }
+  },
+  error: (...args: unknown[]): void => {
+    // Always log errors, but redact sensitive values
+    const safeArgs = args.map(arg => redactSensitiveValues(arg));
+    console.error(...safeArgs);
+  },
+  warn: (...args: unknown[]): void => {
+    if (!isProduction()) {
+      const safeArgs = args.map(arg => redactSensitiveValues(arg));
+      console.warn(...safeArgs);
+    }
+  },
+  info: (...args: unknown[]): void => {
+    if (!isProduction()) {
+      const safeArgs = args.map(arg => redactSensitiveValues(arg));
+      console.info(...safeArgs);
+    }
+  },
+};

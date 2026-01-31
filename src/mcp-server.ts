@@ -799,7 +799,9 @@ async function startHttpServer(port: number): Promise<void> {
 
   return new Promise<void>((resolve, reject) => {
     httpServer.listen(port, () => {
-      console.error(`ExaFlow MCP server running on HTTP port ${port}`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error(`ExaFlow MCP server running on HTTP port ${port}`);
+      }
       resolve();
     }).on('error', reject);
   });
@@ -826,6 +828,7 @@ async function startStdioServer(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
+  // Only log startup message in non-production environments
   if (process.env.NODE_ENV !== 'production') {
     console.error('ExaFlow MCP server running on stdio');
   }
