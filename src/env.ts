@@ -50,14 +50,14 @@ export function loadEnv(): Env {
       'Unknown validation error';
 
     // Log validation errors without exposing sensitive data
-    if (process.env.NODE_ENV === 'development') {
+    // In production, only log generic error messages
+    if (process.env.NODE_ENV === 'production') {
+      console.error('Environment configuration is invalid');
+    } else {
       console.error('Environment validation failed in development mode');
       console.error('Validation errors:', errors);
       // Only in development, show which env vars are expected (not their values)
       console.error('Expected environment variables:', envSchema.keyof().options);
-    } else {
-      console.error('Environment configuration is invalid');
-      console.error('Please check your environment variables');
     }
 
     throw new Error(`Environment validation failed: ${errors}`);
