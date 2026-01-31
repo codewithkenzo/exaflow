@@ -737,7 +737,12 @@ function readRequestBody(req: any): Promise<string> {
  * Processes MCP request and returns response
  */
 async function processMcpRequest(body: string): Promise<any> {
-  const request = JSON.parse(body);
+  const request = JSON.parse(body, (key, value) => {
+    if (['__proto__', 'constructor', 'prototype'].includes(key)) {
+      throw new Error(`Dangerous key "${key}" blocked`);
+    }
+    return value;
+  });
   return server.request(request, { signal: AbortSignal.timeout(30000) });
 }
 
