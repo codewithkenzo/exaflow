@@ -25,7 +25,11 @@ const ResearchTaskResponseSchema = z.object({
 });
 
 const ResearchTaskListResponseSchema = z.object({
-  tasks: z.array(ResearchTaskSchema),
+  tasks: z.array(
+    ResearchTaskSchema.extend({
+      model: z.enum(['exa-research', 'exa-research-pro']),
+    })
+  ),
   total: z.number(),
   page: z.number(),
   pageSize: z.number(),
@@ -320,7 +324,7 @@ export class ExaResearchClient extends BaseExaClient {
         return this.createResearchTask(
           {
             instructions: validatedTask.instructions,
-            model: validatedTask.model,
+            model: validatedTask.model ?? 'exa-research',
             outputSchema: validatedTask.outputSchema,
           },
           validatedTask.taskId

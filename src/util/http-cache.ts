@@ -11,11 +11,59 @@ interface HttpOptions {
   signal?: AbortSignal;
 }
 
+// Import connection pool for HTTP/2 support and connection pooling
+// Use type-only import to avoid runtime issues if undici is not available
+type PoolType = new (origin: string, options: { connections: number }) => {
+  request: (options: {
+    method: string;
+    path: string;
+    headers?: Record<string, string>;
+    body?: string;
+    signal?: AbortSignal;
+  }) => Promise<{
+    body: unknown;
+    statusCode: number;
+    reasonPhrase: string;
+    headers: Record<string, string>;
+  }>;
+  close: () => Promise<void>;
+  size?: number;
+};
+
+let PoolClass: PoolType | null = null;
+try {
+  const undici = require('undici');
+  PoolClass = undici.Pool as PoolType;
+} catch {
+  PoolClass = null;
+}
+
+// Global connection pool instance
+const globalPool = PoolClass ? new PoolClass('https://api.exa.ai', { connections: 10 }) : null;
+
 interface CacheEntry {
-  data: any;
+  data: unknown;
   timestamp: number;
   etag?: string;
   expiresAt?: number;
+}
+
+// Type for the undici pool
+interface PoolInstance {
+  request: (options: {
+    method: string;
+    path: string;
+    headers?: Record<string, string>;
+    body?: string;
+    signal?: AbortSignal;
+  }) => Promise<{
+    body: unknown;
+    statusCode: number;
+    reasonPhrase: string;
+    headers: Record<string, string>;
+  }>;
+  close: () => Promise<void>;
+  size?: number;
 }
 
 interface CacheConfig {
@@ -43,7 +91,7 @@ export class HttpCache {
   /**
    * Generate a cache key from URL and request data
    */
-  private generateKey(url: string, data?: any): string {
+  private generateKey(url: string, data?: unknown): string {
     const dataHash = data ? JSON.stringify(data) : '';
     return `${url}:${dataHash}`;
   }
@@ -61,7 +109,7 @@ export class HttpCache {
   /**
    * Get cached response
    */
-  get(url: string, data?: any): any | null {
+  get<T>(url: string, data?: unknown): T | null {
     if (!this.config.enabled) {
       return null;
     }
@@ -74,13 +122,13 @@ export class HttpCache {
       return null;
     }
 
-    return entry.data;
+    return entry.data as T;
   }
 
   /**
    * Get cached data using a simple key (for testing)
    */
-  getByKey(key: string): any | null {
+  getByKey(key: string): unknown | null {
     if (!this.config.enabled) {
       return null;
     }
@@ -98,7 +146,7 @@ export class HttpCache {
   /**
    * Store response in cache
    */
-  set(url: string, data: any, requestData?: any, ttl?: number): void {
+  set(url: string, data: unknown, requestData?: unknown, ttl?: number): void {
     if (!this.config.enabled) {
       return;
     }
@@ -125,7 +173,7 @@ export class HttpCache {
   /**
    * Store data in cache using a simple key (for testing)
    */
-  setByKey(key: string, data: any, ttl?: number): void {
+  setByKey(key: string, data: unknown, ttl?: number): void {
     if (!this.config.enabled) {
       return;
     }
@@ -221,30 +269,92 @@ export const httpCache = new HttpCache();
  */
 export class CachedHttpClient {
   private cache: HttpCache;
+  private pool: PoolInstance | null;
 
   constructor(cache?: HttpCache) {
     this.cache = cache || httpCache;
+    this.pool = globalPool as PoolInstance | null;
   }
 
   /**
    * HTTP GET with caching
    */
-  async get(url: string, options?: HttpOptions): Promise<any> {
+  async get<T>(url: string, options?: HttpOptions): Promise<T> {
     // Check cache first
-    const cached = this.cache.get(url);
-    if (cached) {
+    const cached = this.cache.get<T>(url);
+    if (cached !== null) {
       return cached;
     }
 
-    // Make actual request
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'ExaFlow/2.0.0',
-        ...options?.headers,
-      },
-      signal: options?.signal,
-    });
+    // Make actual request using connection pool
+    let response: Response;
+
+    if (this.pool) {
+      try {
+        const undiciResponse = await this.pool.request({
+          method: 'GET',
+          path: new URL(url).pathname,
+          headers: {
+            'User-Agent': 'ExaFlow/2.0.0',
+            ...options?.headers,
+          },
+          signal: options?.signal,
+        });
+
+        // Handle undici response which might have different structure
+        const undiciBody = undiciResponse.body ?? null;
+        
+        // Safely convert undici body to fetch BodyInit
+        let body: BodyInit | null = null;
+        if (undiciBody !== null) {
+          if (typeof undiciBody === 'string') {
+            body = undiciBody;
+          } else if (undiciBody instanceof Uint8Array) {
+            body = new ReadableStream({
+              start(controller) {
+                controller.enqueue(undiciBody);
+                controller.close();
+              }
+            });
+          } else if (Buffer.isBuffer(undiciBody)) {
+            body = new ReadableStream({
+              start(controller) {
+                controller.enqueue(new Uint8Array(undiciBody));
+                controller.close();
+              }
+            });
+          } else {
+            body = null;
+          }
+        }
+        
+        response = new Response(body, {
+          status: undiciResponse.statusCode || 200,
+          statusText: undiciResponse.reasonPhrase || 'OK',
+          headers: (undiciResponse.headers as HeadersInit) || {},
+        });
+      } catch {
+        // Fallback to regular fetch if pool fails
+        response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'ExaFlow/2.0.0',
+            ...options?.headers,
+          },
+          signal: options?.signal,
+        });
+      }
+    } else {
+      // Fallback to regular fetch
+      response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'ExaFlow/2.0.0',
+          ...options?.headers,
+        },
+        signal: options?.signal,
+      });
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -274,27 +384,67 @@ export class CachedHttpClient {
   /**
    * HTTP POST with selective caching
    */
-  async post(url: string, data?: any, options?: HttpOptions): Promise<any> {
+  async post<T = unknown>(url: string, data?: unknown, options?: HttpOptions): Promise<T> {
     // For POST requests, only cache idempotent operations (safe to retry)
     const isIdempotent = this.isIdempotentRequest(url, data);
 
     if (isIdempotent) {
-      const cached = this.cache.get(url, data);
-      if (cached) {
+      const cached = this.cache.get<T>(url, data);
+      if (cached !== null) {
         return cached;
       }
     }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'ExaFlow/2.0.0',
-        ...options?.headers,
-      },
-      body: data ? JSON.stringify(data) : undefined,
-      signal: options?.signal,
-    });
+    // Make actual request using connection pool
+    let response: Response;
+
+    if (this.pool) {
+      try {
+        const undiciResponse = await this.pool.request({
+          method: 'POST',
+          path: new URL(url).pathname,
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'ExaFlow/2.0.0',
+            ...options?.headers,
+          },
+          body: data ? JSON.stringify(data) : undefined,
+          signal: options?.signal,
+        });
+
+        // Handle undici response which might have different structure
+        const body = undiciResponse.body ?? null;
+        response = new Response(body as BodyInit | null, {
+          status: undiciResponse.statusCode || 200,
+          statusText: undiciResponse.reasonPhrase || 'OK',
+          headers: (undiciResponse.headers as HeadersInit) || {},
+        });
+      } catch {
+        // Fallback to regular fetch if pool fails
+        response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'ExaFlow/2.0.0',
+            ...options?.headers,
+          },
+          body: data ? JSON.stringify(data) : undefined,
+          signal: options?.signal,
+        });
+      }
+    } else {
+      // Fallback to regular fetch
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'ExaFlow/2.0.0',
+          ...options?.headers,
+        },
+        body: data ? JSON.stringify(data) : undefined,
+        signal: options?.signal,
+      });
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -313,7 +463,7 @@ export class CachedHttpClient {
   /**
    * Determine if a request is idempotent (safe to cache)
    */
-  private isIdempotentRequest(url: string, data?: any): boolean {
+  private isIdempotentRequest(url: string, data?: unknown): boolean {
     // Search and context requests are generally idempotent
     const idempotentPatterns = ['/search', '/context'];
 
@@ -345,6 +495,16 @@ export class CachedHttpClient {
    */
   cleanup(): void {
     this.cache.cleanup();
+  }
+
+  /**
+   * Get connection pool statistics
+   */
+  getPoolStats(): { available: boolean; poolSize?: number } {
+    return {
+      available: !!this.pool,
+      poolSize: this.pool?.size || 0,
+    };
   }
 }
 

@@ -296,5 +296,5 @@ export abstract class BaseExaClient {
    * Abstract method that each client must implement
    * to execute their specific task type
    */
-  abstract executeTask(task: any): Promise<ResultEnvelope<any>>;
+  abstract executeTask(task: unknown): Promise<ResultEnvelope<unknown>>;
 }

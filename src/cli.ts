@@ -11,7 +11,7 @@ import {
   runWebsetTask,
   runResearchTask,
 } from './index';
-import { EnhancedTaskSchema } from './schema';
+import { EnhancedTaskSchema, type EnhancedTask } from './schema';
 import { readInputFile, readStdin, fs } from './util/fs';
 import { streamResult, streamResultCompact, createEventStreamer } from './util/streaming';
 
@@ -61,6 +61,33 @@ interface ResearchOptions {
   poll: boolean;
 }
 
+// Interface for commander command options
+interface CommandOptions {
+  tokens?: string;
+  timeout?: string;
+  type?: string;
+  numResults?: string;
+  includeContents?: boolean;
+  startDate?: string;
+  endDate?: string;
+  stdin?: boolean;
+  input?: string;
+  ids?: string;
+  livecrawl?: string;
+  subpages?: string;
+  subpageTarget?: string;
+  websetId?: string;
+  searchQuery?: string;
+  enrichmentType?: string;
+  webhook?: boolean;
+  poll?: boolean;
+  instructions?: string;
+  instructionsFile?: string;
+  schema?: string;
+  model?: string;
+  taskId?: string;
+}
+
 // Utility Functions
 
 /**
@@ -101,20 +128,21 @@ function handleCliError(
 /**
  * Processes and outputs a single result
  */
-function processResult(result: any, globalOptions: GlobalOptions): number {
+function processResult(result: unknown, globalOptions: GlobalOptions): number {
   if (globalOptions.compact) {
     streamResultCompact(result);
   } else {
     streamResult(result);
   }
-  return result.status === 'error' ? 1 : 0;
+  return result && typeof result === 'object' && 'status' in result && result.status === 'error' ? 1 : 0;
 }
 
 /**
  * Processes and outputs multiple results from batch operations
  */
-function processBatchResults(results: any[], globalOptions: GlobalOptions): number {
-  results.forEach(result => {
+function processBatchResults(results: unknown[], globalOptions: GlobalOptions): number {
+  const typedResults = results as Array<{ status: string }>;
+  typedResults.forEach(result => {
     if (globalOptions.compact) {
       streamResultCompact(result);
     } else {
@@ -122,7 +150,7 @@ function processBatchResults(results: any[], globalOptions: GlobalOptions): numb
     }
   });
 
-  const errorCount = results.filter(r => r.status === 'error').length;
+  const errorCount = typedResults.filter(r => r.status === 'error').length;
   return errorCount > 0 ? 1 : 0;
 }
 
@@ -134,7 +162,7 @@ function createSearchTask(
   options: SearchResultOptions,
   timeout: number,
   taskId: string
-): any {
+): EnhancedTask {
   return EnhancedTaskSchema.parse({
     type: 'search',
     query,
@@ -146,7 +174,7 @@ function createSearchTask(
     timeout,
     retries: 3,
     id: taskId,
-  });
+  }) as EnhancedTask;
 }
 
 /**
@@ -156,7 +184,7 @@ async function processStdinQueries(
   options: SearchResultOptions,
   timeout: number,
   baseTaskId: string
-): Promise<any[]> {
+): Promise<EnhancedTask[]> {
   const stdinData = await readStdin();
   const queries = stdinData
     .trim()
@@ -174,7 +202,7 @@ async function processInputFileQueries(
   options: SearchResultOptions,
   timeout: number,
   baseTaskId: string
-): Promise<any[]> {
+): Promise<EnhancedTask[]> {
   const inputData = await readInputFile(inputFile);
 
   if (Array.isArray(inputData)) {
@@ -189,24 +217,24 @@ async function processInputFileQueries(
             timeout: task.timeout || timeout,
             retries: task.retries || 3,
             id: task.id || `${baseTaskId}-${index}`,
-          })
+          }) as EnhancedTask
         );
   } else if (
     inputData &&
     typeof inputData === 'object' &&
     'tasks' in inputData &&
-    Array.isArray((inputData as any).tasks)
+    Array.isArray((inputData as { tasks: unknown }).tasks)
   ) {
     // Object with tasks array
-    const dataWithTasks = inputData as { tasks: any[] };
-    return dataWithTasks.tasks.map((task: any, index: number) =>
+    const dataWithTasks = inputData as { tasks: Array<{ timeout?: number; retries?: number; id?: string } & Record<string, unknown>> };
+    return dataWithTasks.tasks.map((task, index) =>
       EnhancedTaskSchema.parse({
         ...task,
         type: 'search',
         timeout: task.timeout || timeout,
         retries: task.retries || 3,
         id: task.id || `${baseTaskId}-${index}`,
-      })
+      }) as EnhancedTask
     );
   } else {
     throw new Error('Invalid input file format');
@@ -216,8 +244,17 @@ async function processInputFileQueries(
 /**
  * Safely parses JSON schema file with security validation
  */
-async function parseSchemaFile(schemaFile: string): Promise<Record<string, any>> {
+async function parseSchemaFile(schemaFile: string): Promise<Record<string, unknown>> {
   const schemaContent = await fs.readFile(schemaFile);
+
+  // Pre-validate JSON string for dangerous keys before parsing
+  if (
+    schemaContent.includes('"__proto__"') ||
+    schemaContent.includes('"constructor"') ||
+    schemaContent.includes('"prototype"')
+  ) {
+    throw new Error('Schema contains potentially dangerous prototype pollution properties');
+  }
 
   // Validate JSON format before parsing
   if (typeof schemaContent !== 'string' || schemaContent.trim().startsWith('__proto__')) {
@@ -225,26 +262,18 @@ async function parseSchemaFile(schemaFile: string): Promise<Record<string, any>>
   }
 
   try {
-    const parsed = JSON.parse(schemaContent);
+    // Use reviver function as additional safety layer
+    const parsed = JSON.parse(schemaContent, (key, value) => {
+      if (['__proto__', 'constructor', 'prototype'].includes(key)) {
+        throw new Error(`Dangerous key "${key}" blocked by JSON.parse reviver`);
+      }
+      return value;
+    });
 
     // Validate it's a valid JSON schema object
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new Error('Schema must be a valid JSON object');
     }
-
-    // Check for dangerous prototype pollution patterns
-    const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
-    const checkForDangerousKeys = (obj: any, path = '') => {
-      for (const key in obj) {
-        if (dangerousKeys.includes(key)) {
-          throw new Error(`Dangerous key "${key}" found in schema at ${path}`);
-        }
-        if (obj[key] && typeof obj[key] === 'object') {
-          checkForDangerousKeys(obj[key], `${path}.${key}`);
-        }
-      }
-    };
-    checkForDangerousKeys(parsed);
 
     return parsed;
   } catch (parseError) {
@@ -392,12 +421,12 @@ program
   .argument('<query>', 'Query string')
   .option('--tokens <number>', 'Number of tokens for response', '5000')
   .option('--timeout <number>', 'Request timeout in milliseconds')
-  .action(async (query: string, options: any, command: any) => {
+  .action(async (query: string, options: CommandOptions, command: unknown) => {
     const { globalOptions, streamer, timeout: globalTimeout } = createCommandContext(command);
 
     try {
       const result = await runContextTask(query, {
-        tokens: parseInt(options.tokens),
+        tokens: parseInt(options.tokens || '5000'),
         timeout: parseInt(options.timeout || globalTimeout.toString()),
         taskId: `cli-context-${Date.now()}`,
       });
@@ -407,6 +436,99 @@ program
       handleCliError(error, streamer);
     }
   });
+
+// Search command handlers
+
+/**
+ * Handles batch search from stdin input
+ */
+async function handleStdinSearch(
+  searchOptions: SearchResultOptions,
+  timeout: number,
+  baseTaskId: string,
+  concurrency: number
+): Promise<unknown[]> {
+  const tasks = await processStdinQueries(searchOptions, timeout, baseTaskId);
+  return runBatch(tasks, concurrency);
+}
+
+/**
+ * Handles batch search from file input
+ */
+async function handleFileSearch(
+  inputFile: string,
+  searchOptions: SearchResultOptions,
+  timeout: number,
+  baseTaskId: string,
+  concurrency: number
+): Promise<unknown[]> {
+  const tasks = await processInputFileQueries(inputFile, searchOptions, timeout, baseTaskId);
+  return runBatch(tasks, concurrency);
+}
+
+/**
+ * Handles single search query
+ */
+async function handleSingleSearch(
+  query: string,
+  searchOptions: SearchResultOptions,
+  timeout: number,
+  baseTaskId: string
+): Promise<unknown> {
+  return runSearchTask(query, {
+    searchType: searchOptions.type,
+    numResults: parseInt(searchOptions.numResults),
+    includeContents: searchOptions.includeContents,
+    startDate: searchOptions.startDate,
+    endDate: searchOptions.endDate,
+    timeout,
+    taskId: baseTaskId,
+  });
+}
+
+/**
+ * Executes search based on input source
+ */
+async function executeSearch(
+  query: string | undefined,
+  options: CommandOptions,
+  context: CommandContext
+): Promise<number> {
+  const { globalOptions, concurrency, timeout } = context;
+
+  const searchOptions: SearchResultOptions = {
+    type: options.type as 'auto' | 'keyword' | 'neural' | 'fast',
+    numResults: options.numResults || '10',
+    includeContents: options.includeContents || false,
+    startDate: options.startDate,
+    endDate: options.endDate,
+  };
+
+  const baseTaskId = `cli-search-${Date.now()}`;
+
+  if (options.stdin) {
+    const results = await handleStdinSearch(searchOptions, timeout, baseTaskId, concurrency);
+    return processBatchResults(results, globalOptions);
+  }
+
+  if (options.input) {
+    const results = await handleFileSearch(
+      options.input,
+      searchOptions,
+      timeout,
+      baseTaskId,
+      concurrency
+    );
+    return processBatchResults(results, globalOptions);
+  }
+
+  if (query) {
+    const result = await handleSingleSearch(query, searchOptions, timeout, baseTaskId);
+    return processResult(result, globalOptions);
+  }
+
+  throw new Error('Either provide a query argument or use --input or --stdin');
+}
 
 // Search command
 program
@@ -420,52 +542,14 @@ program
   .option('--include-contents', 'Include full content in results', false)
   .option('--start-date <date>', 'Start date filter (ISO 8601)')
   .option('--end-date <date>', 'End date filter (ISO 8601)')
-  .action(async (query: string | undefined, options: any, command: any) => {
-    const { globalOptions, streamer, concurrency, timeout } = createCommandContext(command);
+  .action(async (query: string | undefined, options: CommandOptions, command: unknown) => {
+    const context = createCommandContext(command);
 
     try {
-      const searchOptions: SearchResultOptions = {
-        type: options.type,
-        numResults: options.numResults,
-        includeContents: options.includeContents,
-        startDate: options.startDate,
-        endDate: options.endDate,
-      };
-
-      const baseTaskId = `cli-search-${Date.now()}`;
-
-      if (options.stdin) {
-        // Handle stdin input
-        const tasks = await processStdinQueries(searchOptions, timeout, baseTaskId);
-        const results = await runBatch(tasks, concurrency);
-        process.exit(processBatchResults(results, globalOptions));
-      } else if (options.input) {
-        // Handle file input
-        const tasks = await processInputFileQueries(
-          options.input,
-          searchOptions,
-          timeout,
-          baseTaskId
-        );
-        const results = await runBatch(tasks, concurrency);
-        process.exit(processBatchResults(results, globalOptions));
-      } else if (query) {
-        // Single query
-        const result = await runSearchTask(query, {
-          searchType: searchOptions.type,
-          numResults: parseInt(searchOptions.numResults),
-          includeContents: searchOptions.includeContents,
-          startDate: searchOptions.startDate,
-          endDate: searchOptions.endDate,
-          timeout,
-          taskId: baseTaskId,
-        });
-        process.exit(processResult(result, globalOptions));
-      } else {
-        throw new Error('Either provide a query argument or use --input or --stdin');
-      }
+      const exitCode = await executeSearch(query, options, context);
+      process.exit(exitCode);
     } catch (error) {
-      handleCliError(error, streamer);
+      handleCliError(error, context.streamer);
     }
   });
 
@@ -478,7 +562,7 @@ program
   .option('--livecrawl <mode>', 'Live crawl mode: always, fallback, never', 'fallback')
   .option('--subpages <number>', 'Number of subpages to crawl', '0')
   .option('--subpage-target <items>', 'Target subpage sections (comma-separated)')
-  .action(async (options: any, command: any) => {
+  .action(async (options: CommandOptions, command: unknown) => {
     const { globalOptions, streamer, timeout } = createCommandContext(command);
 
     try {
@@ -489,8 +573,8 @@ program
       const urls = await extractUrls({ stdin: options.stdin, ids: options.ids });
 
       const result = await runContentsTask(urls, {
-        livecrawl: options.livecrawl,
-        subpages: parseInt(options.subpages),
+        livecrawl: options.livecrawl as 'always' | 'fallback' | 'never',
+        subpages: parseInt(options.subpages || '0'),
         subpageTarget,
         timeout,
         taskId: `cli-contents-${Date.now()}`,
@@ -512,7 +596,7 @@ program
   .option('--enrichment-type <type>', 'Enrichment type for enrich operation')
   .option('--webhook', 'Use webhook mode for async operations', false)
   .option('--poll', 'Poll for completion (works with create and search)', false)
-  .action(async (operation: string, options: any, command: any) => {
+  .action(async (operation: string, options: CommandOptions, command: unknown) => {
     const { globalOptions, streamer, timeout } = createCommandContext(command);
 
     try {
@@ -524,11 +608,11 @@ program
         websetId: options.websetId,
         searchQuery: options.searchQuery,
         enrichmentType: options.enrichmentType,
-        webhook: options.webhook,
-        poll: options.poll,
+        webhook: options.webhook || false,
+        poll: options.poll || false,
       };
 
-      const result = await runWebsetTask(operation as any, {
+      const result = await runWebsetTask(operation as 'create' | 'search' | 'poll' | 'enrich', {
         websetId: websetOptions.websetId,
         searchQuery: websetOptions.searchQuery,
         enrichmentType: websetOptions.enrichmentType,
@@ -543,6 +627,70 @@ program
     }
   });
 
+// Research command handlers
+
+/**
+ * Validates research operation type
+ */
+function validateResearchOperation(operation: string): void {
+  if (!['create', 'get', 'list'].includes(operation)) {
+    throw new Error('Invalid operation. Use: create, get, list');
+  }
+}
+
+/**
+ * Builds research parameters based on operation and options
+ */
+async function buildResearchParams(
+  operation: string,
+  options: ResearchOptions,
+  timeout: number
+): Promise<Record<string, unknown>> {
+  const params: Record<string, unknown> = {
+    model: options.model,
+    taskId: options.taskId,
+    poll: options.poll,
+    timeout,
+  };
+
+  if (operation === 'create') {
+    params.instructions = await loadResearchInstructions(options);
+
+    if (options.schema) {
+      params.outputSchema = await parseSchemaFile(options.schema);
+    }
+  }
+
+  return params;
+}
+
+/**
+ * Executes research operation
+ */
+async function executeResearch(
+  operation: string,
+  options: CommandOptions,
+  context: CommandContext
+): Promise<number> {
+  const { timeout } = context;
+
+  validateResearchOperation(operation);
+
+  const researchOptions: ResearchOptions = {
+    instructions: options.instructions,
+    instructionsFile: options.instructionsFile,
+    model: options.model || 'exa-research',
+    schema: options.schema,
+    taskId: options.taskId,
+    poll: options.poll || false,
+  };
+
+  const researchParams = await buildResearchParams(operation, researchOptions, timeout);
+  const result = await runResearchTask(operation as 'create' | 'get' | 'list', researchParams);
+
+  return processResult(result, context.globalOptions);
+}
+
 // Research command
 program
   .command('research')
@@ -554,53 +702,14 @@ program
   .option('--schema <file>', 'JSON schema file for structured output')
   .option('--task-id <id>', 'Task ID for get operation')
   .option('--poll', 'Poll for completion (works with create)', false)
-  .action(async (operation: string = 'create', options: any, command: any) => {
-    const { globalOptions, streamer, timeout } = createCommandContext(command);
+  .action(async (operation: string = 'create', options: CommandOptions, command: unknown) => {
+    const context = createCommandContext(command);
 
     try {
-      if (!['create', 'get', 'list'].includes(operation)) {
-        throw new Error('Invalid operation. Use: create, get, list');
-      }
-
-      const researchOptions: ResearchOptions = {
-        instructions: options.instructions,
-        instructionsFile: options.instructionsFile,
-        model: options.model,
-        schema: options.schema,
-        taskId: options.taskId,
-        poll: options.poll,
-      };
-
-      let instructions: string | undefined;
-      let outputSchema: Record<string, any> | undefined;
-
-      if (operation === 'create') {
-        instructions = await loadResearchInstructions(researchOptions);
-
-        if (researchOptions.schema) {
-          outputSchema = await parseSchemaFile(researchOptions.schema);
-        }
-      }
-
-      const researchParams: any = {
-        model: researchOptions.model,
-        taskId: researchOptions.taskId,
-        poll: researchOptions.poll,
-        timeout,
-      };
-
-      if (instructions !== undefined) {
-        researchParams.instructions = instructions;
-      }
-
-      if (outputSchema !== undefined) {
-        researchParams.outputSchema = outputSchema;
-      }
-
-      const result = await runResearchTask(operation as any, researchParams);
-      process.exit(processResult(result, globalOptions));
+      const exitCode = await executeResearch(operation, options, context);
+      process.exit(exitCode);
     } catch (error) {
-      handleCliError(error, streamer);
+      handleCliError(error, context.streamer);
     }
   });
 

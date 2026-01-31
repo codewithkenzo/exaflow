@@ -5,6 +5,156 @@ export interface HttpOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * Type for HTTP response data
+ */
+export type HttpResponseData = unknown;
+
+/**
+ * Type for undici Pool
+ */
+interface PoolInstance {
+  request: (options: {
+    method: string;
+    headers?: Record<string, string>;
+    body?: string;
+    signal?: AbortSignal;
+  }) => Promise<{
+    body: unknown;
+    statusCode: number;
+    reasonPhrase: string;
+    headers: Record<string, string>;
+  }>;
+  close: () => Promise<void>;
+  size?: number;
+}
+
+// Connection pool configuration
+export interface PoolConfig {
+  /** Maximum number of connections per origin */
+  maxConnectionsPerOrigin?: number;
+  /** Connection timeout in milliseconds */
+  connectionTimeout?: number;
+  /** Keep alive timeout in milliseconds */
+  keepAliveTimeout?: number;
+  /** Maximum idle connections per origin */
+  maxIdleConnections?: number;
+}
+
+// Default pool configuration
+const DEFAULT_POOL_CONFIG: PoolConfig = {
+  maxConnectionsPerOrigin: 10,
+  connectionTimeout: 10000,
+  keepAliveTimeout: 60000,
+  maxIdleConnections: 5,
+};
+
+/**
+ * Connection Pool Manager using undici for efficient HTTP connection pooling
+ */
+export class ConnectionPool {
+  private pool: Map<string, PoolInstance> = new Map();
+  private config: PoolConfig;
+
+  constructor(config: PoolConfig = {}) {
+    this.config = { ...DEFAULT_POOL_CONFIG, ...config };
+  }
+
+  /**
+   * Get or create a connection pool for a specific origin
+   */
+  private getPool(origin: string): PoolInstance | null {
+    if (!this.pool.has(origin)) {
+      // Dynamic import to avoid issues in environments without undici
+      try {
+        const undici = require('undici');
+        const newPool: PoolInstance = new undici.Pool(origin, {
+          connections: this.config.maxConnectionsPerOrigin,
+          timeout: this.config.connectionTimeout,
+          keepAlive: true,
+        });
+        this.pool.set(origin, newPool);
+      } catch {
+        // Fallback if undici is not available
+        return null;
+      }
+    }
+
+    return this.pool.get(origin) ?? null;
+  }
+
+  /**
+   * Execute a request using connection pooling
+   */
+  async request(
+    url: string,
+    options: {
+      method?: string;
+      headers?: Record<string, string>;
+      body?: string;
+      signal?: AbortSignal;
+    } = {}
+  ): Promise<unknown> {
+    const pool = this.getPool(new URL(url).origin);
+
+    if (!pool) {
+      // Fallback to regular fetch if pool is not available
+      return fetch(url, {
+        method: options.method || 'GET',
+        headers: options.headers,
+        body: options.body,
+        signal: options.signal,
+      });
+    }
+
+    return pool.request({
+      method: options.method || 'GET',
+      headers: options.headers,
+      body: options.body,
+      signal: options.signal,
+    });
+  }
+
+  /**
+   * Close all pools and clear the pool map
+   */
+  async close(): Promise<void> {
+    for (const pool of this.pool.values()) {
+      if (pool) {
+        await pool.close();
+      }
+    }
+    this.pool.clear();
+  }
+
+  /**
+   * Get pool statistics
+   */
+  getStats(): { poolCount: number; poolSizes: Record<string, number> } {
+    const sizes: Record<string, number> = {};
+
+    for (const [origin, pool] of this.pool.entries()) {
+      // Try to get pool size if available
+      sizes[origin] = pool.size ?? 0;
+    }
+
+    return {
+      poolCount: this.pool.size,
+      poolSizes: sizes,
+    };
+  }
+
+  /**
+   * Get the current configuration
+   */
+  getConfig(): PoolConfig {
+    return { ...this.config };
+  }
+}
+
+// Global connection pool instance
+export const connectionPool = new ConnectionPool();
+
 export interface CircuitBreakerOptions {
   failureThreshold: number;
   resetTimeout: number;
@@ -82,14 +232,22 @@ export class CircuitBreaker {
 
 export class HttpClient {
   private circuitBreaker: CircuitBreaker;
+  private pool: ConnectionPool;
+  private usePooling: boolean;
 
-  constructor(circuitBreakerOptions?: Partial<CircuitBreakerOptions>) {
+  constructor(
+    circuitBreakerOptions?: Partial<CircuitBreakerOptions>,
+    poolConfig?: PoolConfig,
+    usePooling: boolean = true
+  ) {
     this.circuitBreaker = new CircuitBreaker({
       failureThreshold: 5,
       resetTimeout: 60000, // 1 minute
       monitoringPeriod: 300000, // 5 minutes
       ...circuitBreakerOptions,
     });
+    this.pool = new ConnectionPool(poolConfig);
+    this.usePooling = usePooling;
   }
 
   async fetch(
@@ -117,16 +275,74 @@ export class HttpClient {
         }
 
         try {
-          const response = await fetch(url, {
-            method,
-            headers: {
+          let response: Response;
+
+          if (this.usePooling) {
+            // Use connection pooling
+            const requestHeaders = {
               'Content-Type': 'application/json',
               'User-Agent': 'exa-personal-tool/1.0.0',
               ...headers,
-            },
-            body,
-            signal: controller.signal,
-          });
+            };
+
+            const undiciResponse = await this.pool.request(url, {
+              method,
+              headers: requestHeaders,
+              body,
+              signal: controller.signal,
+            }) as {
+              body: unknown;
+              statusCode: number;
+              reasonPhrase: string;
+              headers: Record<string, string>;
+            };
+
+            // Convert undici response to fetch Response
+            // Handle undici response which might have different structure
+            const undiciBody = undiciResponse.body ?? null;
+            
+            // Safely convert undici body to fetch BodyInit
+            let responseBody: BodyInit | null = null;
+            if (undiciBody !== null) {
+              if (typeof undiciBody === 'string') {
+                responseBody = undiciBody;
+              } else if (undiciBody instanceof Uint8Array) {
+                responseBody = new ReadableStream({
+                  start(controller) {
+                    controller.enqueue(undiciBody);
+                    controller.close();
+                  }
+                });
+              } else if (Buffer.isBuffer(undiciBody)) {
+                responseBody = new ReadableStream({
+                  start(controller) {
+                    controller.enqueue(new Uint8Array(undiciBody));
+                    controller.close();
+                  }
+                });
+              } else {
+                responseBody = null;
+              }
+            }
+            
+            response = new Response(responseBody, {
+              status: undiciResponse.statusCode || 200,
+              statusText: undiciResponse.reasonPhrase || 'OK',
+              headers: (undiciResponse.headers as HeadersInit) || {},
+            });
+          } else {
+            // Fallback to regular fetch
+            response = await fetch(url, {
+              method,
+              headers: {
+                'Content-Type': 'application/json',
+                'User-Agent': 'exa-personal-tool/1.0.0',
+                ...headers,
+              },
+              body,
+              signal: controller.signal,
+            });
+          }
 
           clearTimeout(timeoutId);
 
@@ -154,7 +370,7 @@ export class HttpClient {
     });
   }
 
-  async post<T = any>(url: string, data: any, options: HttpOptions = {}): Promise<T> {
+  async post<T>(url: string, data: unknown, options: HttpOptions = {}): Promise<T> {
     const response = await this.fetch(url, {
       ...options,
       method: 'POST',
@@ -164,7 +380,7 @@ export class HttpClient {
     return response.json() as Promise<T>;
   }
 
-  async get<T = any>(url: string, options: HttpOptions = {}): Promise<T> {
+  async get<T>(url: string, options: HttpOptions = {}): Promise<T> {
     const response = await this.fetch(url, {
       ...options,
       method: 'GET',
@@ -175,6 +391,17 @@ export class HttpClient {
 
   getCircuitBreakerStats() {
     return this.circuitBreaker.getStats();
+  }
+
+  getPoolStats() {
+    return this.pool.getStats();
+  }
+
+  /**
+   * Close the connection pool
+   */
+  async close(): Promise<void> {
+    await this.pool.close();
   }
 }
 

@@ -293,358 +293,508 @@ function validateDate(dateString: string): void {
   }
 }
 
+// Tool handler utilities
+
+/**
+ * Creates standardized success response
+ */
+function createSuccessResponse(result: unknown): { content: Array<{ type: string; text: string }> } {
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify(result, null, 2),
+      },
+    ],
+  };
+}
+
+/**
+ * Creates standardized error response
+ */
+function createErrorResponse(
+  error: unknown,
+  toolName: string,
+  args: Record<string, any>
+): { content: Array<{ type: string; text: string }> } {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify(
+          {
+            status: 'error',
+            error: errorMessage,
+            tool: toolName,
+            arguments: args,
+          },
+          null,
+          2
+        ),
+      },
+    ],
+  };
+}
+
+/**
+ * Extracts and validates search type from arguments
+ */
+function extractSearchType(args: Record<string, any>): 'auto' | 'keyword' | 'neural' | 'fast' {
+  const validTypes = ['auto', 'keyword', 'neural', 'fast'];
+  return args.searchType && validTypes.includes(args.searchType)
+    ? args.searchType
+    : 'neural';
+}
+
+/**
+ * Extracts and validates number results from arguments
+ */
+function extractNumResults(args: Record<string, any>, defaultValue = 10): number {
+  const num = args.numResults;
+  return typeof num === 'number' && num >= 1 && num <= 50 ? num : defaultValue;
+}
+
+/**
+ * Extracts and validates optional date from arguments
+ */
+function extractOptionalDate(args: Record<string, any>, key: string): string | undefined {
+  if (!args[key]) return undefined;
+  validateDate(args[key] as string);
+  return args[key] as string;
+}
+
+/**
+ * Validates required query parameter
+ */
+function validateQueryParam(args: Record<string, any>): void {
+  if (!args.query || typeof args.query !== 'string') {
+    throw new Error('query parameter is required and must be a string');
+  }
+}
+
+/**
+ * Builds enhanced query for professional search
+ */
+function buildProfessionalQuery(args: Record<string, any>): string {
+  let enhancedQuery = sanitizeString(args.query, 5000);
+
+  if (args.includeProfiles) {
+    enhancedQuery += ' site:linkedin.com';
+  }
+
+  if (args.includeCompanies) {
+    enhancedQuery += ' company OR corporation OR startup';
+  }
+
+  if (args.location) {
+    const sanitizedLocation = sanitizeString(args.location, 500);
+    enhancedQuery += ` ${sanitizedLocation}`;
+  }
+
+  return enhancedQuery;
+}
+
+/**
+ * Builds enhanced query for code discovery
+ */
+function buildCodeQuery(args: Record<string, any>): string {
+  let enhancedQuery = sanitizeString(args.query, 5000);
+
+  if (args.repositories) {
+    enhancedQuery += ' site:github.com OR site:gitlab.com';
+  }
+
+  if (args.documentation) {
+    enhancedQuery += ' documentation OR tutorial OR guide';
+  }
+
+  if (args.language) {
+    const sanitizedLanguage = sanitizeString(args.language, 100);
+    enhancedQuery += ` ${sanitizedLanguage} programming`;
+  }
+
+  return enhancedQuery;
+}
+
+/**
+ * Builds enhanced query for knowledge graph search
+ */
+function buildKnowledgeQuery(args: Record<string, any>): string {
+  let enhancedQuery = sanitizeString(args.query, 5000);
+
+  const rawSources = Array.isArray(args.sources) ? args.sources : ['wikipedia'];
+  const allowedSources = ['wikipedia', 'government', 'educational', 'news'];
+  const sanitizedSources = rawSources
+    .filter(source => typeof source === 'string' && allowedSources.includes(source))
+    .map(source => sanitizeString(source, 100));
+
+  if (sanitizedSources.includes('wikipedia')) {
+    enhancedQuery += ' site:wikipedia.org';
+  }
+
+  if (sanitizedSources.includes('government')) {
+    enhancedQuery += ' site:.gov';
+  }
+
+  if (sanitizedSources.includes('educational')) {
+    enhancedQuery += ' site:.edu OR educational';
+  }
+
+  if (sanitizedSources.includes('news')) {
+    enhancedQuery += ' news OR encyclopedia';
+  }
+
+  return enhancedQuery;
+}
+
+/**
+ * Validates and sanitizes URL list from arguments
+ */
+function validateAndSanitizeUrls(args: Record<string, any>): string[] {
+  if (!args.urls || !Array.isArray(args.urls)) {
+    throw new Error('urls parameter is required and must be an array');
+  }
+
+  if (args.urls.length === 0 || args.urls.length > 20) {
+    throw new Error('URLs array must contain between 1 and 20 URLs');
+  }
+
+  const validUrls: string[] = [];
+  for (const url of args.urls) {
+    if (typeof url !== 'string') {
+      throw new Error('All URLs must be strings');
+    }
+
+    const sanitizedUrl = sanitizeString(url, 2048);
+
+    try {
+      const urlObj = new URL(sanitizedUrl);
+      if (!['http:', 'https:'].includes(urlObj.protocol)) {
+        throw new Error('Only HTTP and HTTPS URLs are allowed');
+      }
+      validUrls.push(sanitizedUrl);
+    } catch {
+      throw new Error(`Invalid URL: ${sanitizedUrl}`);
+    }
+  }
+
+  return validUrls;
+}
+
+/**
+ * Extracts livecrawl mode from arguments
+ */
+function extractLivecrawlMode(args: Record<string, any>): 'always' | 'fallback' | 'never' {
+  const validModes = ['always', 'fallback', 'never'];
+  return args.livecrawl && validModes.includes(args.livecrawl)
+    ? args.livecrawl
+    : 'fallback';
+}
+
+/**
+ * Extracts subpages count from arguments
+ */
+function extractSubpages(args: Record<string, any>): number {
+  const num = args.subpages;
+  return typeof num === 'number' && num >= 0 && num <= 20 ? num : 0;
+}
+
+// Individual tool handlers
+
+/**
+ * Handles exa_semantic_search tool
+ */
+async function handleSemanticSearch(args: Record<string, any>): Promise<any> {
+  validateQueryParam(args);
+
+  const sanitizedQuery = sanitizeString(args.query, 5000);
+  const searchType = extractSearchType(args);
+  const numResults = extractNumResults(args);
+  const includeContents = Boolean(args.includeContents);
+  const startDate = extractOptionalDate(args, 'startDate');
+  const endDate = extractOptionalDate(args, 'endDate');
+
+  const result = await runSearchTask(sanitizedQuery, {
+    searchType,
+    numResults,
+    includeContents,
+    startDate,
+    endDate,
+    timeout: 30000,
+    retries: 3,
+    taskId: `mcp-search-${Date.now()}`,
+  });
+
+  return createSuccessResponse(result);
+}
+
+/**
+ * Handles exa_research_discovery tool
+ */
+async function handleResearchDiscovery(args: Record<string, any>): Promise<any> {
+  validateQueryParam(args);
+
+  const sanitizedQuery = sanitizeString(args.query, 5000);
+  const tokens =
+    typeof args.tokens === 'number' && args.tokens >= 100 && args.tokens <= 50000
+      ? args.tokens
+      : 5000;
+
+  const result = await runContextTask(sanitizedQuery, {
+    tokens,
+    timeout: 30000,
+    retries: 3,
+    taskId: `mcp-research-${Date.now()}`,
+  });
+
+  return createSuccessResponse(result);
+}
+
+/**
+ * Handles exa_professional_finder tool
+ */
+async function handleProfessionalFinder(args: Record<string, any>): Promise<any> {
+  validateQueryParam(args);
+
+  const enhancedQuery = buildProfessionalQuery(args);
+
+  const result = await runSearchTask(enhancedQuery, {
+    searchType: 'neural',
+    numResults: 15,
+    includeContents: false,
+    timeout: 30000,
+    retries: 3,
+    taskId: `mcp-professional-${Date.now()}`,
+  });
+
+  return createSuccessResponse(result);
+}
+
+/**
+ * Handles exa_code_discovery tool
+ */
+async function handleCodeDiscovery(args: Record<string, any>): Promise<any> {
+  validateQueryParam(args);
+
+  const enhancedQuery = buildCodeQuery(args);
+
+  const result = await runSearchTask(enhancedQuery, {
+    searchType: 'neural',
+    numResults: 15,
+    includeContents: false,
+    timeout: 30000,
+    retries: 3,
+    taskId: `mcp-code-${Date.now()}`,
+  });
+
+  return createSuccessResponse(result);
+}
+
+/**
+ * Handles exa_knowledge_graph tool
+ */
+async function handleKnowledgeGraph(args: Record<string, any>): Promise<any> {
+  validateQueryParam(args);
+
+  const enhancedQuery = buildKnowledgeQuery(args);
+
+  const result = await runSearchTask(enhancedQuery, {
+    searchType: 'neural',
+    numResults: 12,
+    includeContents: args.depth === 'comprehensive',
+    timeout: 30000,
+    retries: 3,
+    taskId: `mcp-knowledge-${Date.now()}`,
+  });
+
+  return createSuccessResponse(result);
+}
+
+/**
+ * Handles exa_content_extract tool
+ */
+async function handleContentExtract(args: Record<string, any>): Promise<any> {
+  const validUrls = validateAndSanitizeUrls(args);
+  const livecrawl = extractLivecrawlMode(args);
+  const subpages = extractSubpages(args);
+
+  const result = await runContentsTask(validUrls, {
+    livecrawl,
+    subpages,
+    timeout: 60000,
+    retries: 3,
+    taskId: `mcp-contents-${Date.now()}`,
+  });
+
+  return createSuccessResponse(result);
+}
+
+/**
+ * Routes tool call to appropriate handler
+ */
+async function routeToolCall(name: string, args: Record<string, any>): Promise<any> {
+  switch (name) {
+    case 'exa_semantic_search':
+      return handleSemanticSearch(args);
+    case 'exa_research_discovery':
+      return handleResearchDiscovery(args);
+    case 'exa_professional_finder':
+      return handleProfessionalFinder(args);
+    case 'exa_code_discovery':
+      return handleCodeDiscovery(args);
+    case 'exa_knowledge_graph':
+      return handleKnowledgeGraph(args);
+    case 'exa_content_extract':
+      return handleContentExtract(args);
+    default:
+      throw new Error(`Unknown tool: ${name}`);
+  }
+}
+
+/**
+ * Validates tool arguments for security
+ */
+function validateToolArgs(args: Record<string, any>): void {
+  if (!args || typeof args !== 'object') {
+    throw new Error('Tool arguments are required');
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(args, '__proto__') ||
+    Object.prototype.hasOwnProperty.call(args, 'constructor') ||
+    Object.prototype.hasOwnProperty.call(args, 'prototype')
+  ) {
+    throw new Error('Invalid arguments object');
+  }
+}
+
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async request => {
   const { name, arguments: args } = request.params;
-
-  // Type assertion for arguments object (moved outside try block)
   const typedArgs = args as Record<string, any>;
 
   try {
-    // Validate args exists and add proper type annotation
-    if (!args || typeof args !== 'object') {
-      throw new Error('Tool arguments are required');
-    }
-
-    // Prevent prototype pollution (check for dangerous property access)
-    if (
-      typedArgs.hasOwnProperty('__proto__') ||
-      typedArgs.hasOwnProperty('constructor') ||
-      typedArgs.hasOwnProperty('prototype')
-    ) {
-      throw new Error('Invalid arguments object');
-    }
-
-    switch (name) {
-      case 'exa_semantic_search': {
-        if (!typedArgs.query || typeof typedArgs.query !== 'string') {
-          throw new Error('query parameter is required and must be a string');
-        }
-
-        // Sanitize and validate inputs
-        const sanitizedQuery = sanitizeString(typedArgs.query, 5000);
-        const searchType =
-          typedArgs.searchType &&
-          ['auto', 'keyword', 'neural', 'fast'].includes(typedArgs.searchType)
-            ? (typedArgs.searchType as 'auto' | 'keyword' | 'neural' | 'fast')
-            : 'neural';
-        const numResults =
-          typeof typedArgs.numResults === 'number' &&
-          typedArgs.numResults >= 1 &&
-          typedArgs.numResults <= 50
-            ? typedArgs.numResults
-            : 10;
-        const includeContents = Boolean(typedArgs.includeContents);
-        const startDate = typedArgs.startDate
-          ? (() => {
-              validateDate(typedArgs.startDate as string);
-              return typedArgs.startDate as string;
-            })()
-          : undefined;
-        const endDate = typedArgs.endDate
-          ? (() => {
-              validateDate(typedArgs.endDate as string);
-              return typedArgs.endDate as string;
-            })()
-          : undefined;
-
-        const result = await runSearchTask(sanitizedQuery, {
-          searchType,
-          numResults,
-          includeContents,
-          startDate,
-          endDate,
-          timeout: 30000,
-          retries: 3,
-          taskId: `mcp-search-${Date.now()}`,
-        });
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'exa_research_discovery': {
-        if (!typedArgs.query || typeof typedArgs.query !== 'string') {
-          throw new Error('query parameter is required and must be a string');
-        }
-
-        // Sanitize and validate inputs
-        const sanitizedQuery = sanitizeString(typedArgs.query, 5000);
-        const tokens =
-          typeof typedArgs.tokens === 'number' &&
-          typedArgs.tokens >= 100 &&
-          typedArgs.tokens <= 50000
-            ? typedArgs.tokens
-            : 5000;
-
-        const result = await runContextTask(sanitizedQuery, {
-          tokens,
-          timeout: 30000,
-          retries: 3,
-          taskId: `mcp-research-${Date.now()}`,
-        });
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'exa_professional_finder': {
-        if (!typedArgs.query || typeof typedArgs.query !== 'string') {
-          throw new Error('query parameter is required and must be a string');
-        }
-
-        let enhancedQuery = typedArgs.query;
-
-        if (typedArgs.includeProfiles) {
-          enhancedQuery += ' site:linkedin.com';
-        }
-
-        if (typedArgs.includeCompanies) {
-          enhancedQuery += ' company OR corporation OR startup';
-        }
-
-        if (typedArgs.location) {
-          enhancedQuery += ` ${typedArgs.location}`;
-        }
-
-        const result = await runSearchTask(enhancedQuery, {
-          searchType: 'neural',
-          numResults: 15,
-          includeContents: false,
-          timeout: 30000,
-          retries: 3,
-          taskId: `mcp-professional-${Date.now()}`,
-        });
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'exa_code_discovery': {
-        let enhancedQuery = typedArgs.query;
-
-        if (typedArgs.repositories) {
-          enhancedQuery += ' site:github.com OR site:gitlab.com';
-        }
-
-        if (typedArgs.documentation) {
-          enhancedQuery += ' documentation OR tutorial OR guide';
-        }
-
-        if (typedArgs.language) {
-          enhancedQuery += ` ${typedArgs.language} programming`;
-        }
-
-        const result = await runSearchTask(enhancedQuery, {
-          searchType: 'neural',
-          numResults: 15,
-          includeContents: false,
-          timeout: 30000,
-          retries: 3,
-          taskId: `mcp-code-${Date.now()}`,
-        });
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'exa_knowledge_graph': {
-        let enhancedQuery = typedArgs.query;
-        const sources = Array.isArray(typedArgs.sources) ? typedArgs.sources : ['wikipedia'];
-
-        if (sources.includes('wikipedia')) {
-          enhancedQuery += ' site:wikipedia.org';
-        }
-
-        if (sources.includes('government')) {
-          enhancedQuery += ' site:.gov';
-        }
-
-        if (sources.includes('educational')) {
-          enhancedQuery += ' site:.edu OR educational';
-        }
-
-        if (sources.includes('news')) {
-          enhancedQuery += ' news OR encyclopedia';
-        }
-
-        const result = await runSearchTask(enhancedQuery, {
-          searchType: 'neural',
-          numResults: 12,
-          includeContents: typedArgs.depth === 'comprehensive',
-          timeout: 30000,
-          retries: 3,
-          taskId: `mcp-knowledge-${Date.now()}`,
-        });
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'exa_content_extract': {
-        if (!typedArgs.urls || !Array.isArray(typedArgs.urls)) {
-          throw new Error('urls parameter is required and must be an array');
-        }
-
-        if (typedArgs.urls.length === 0 || typedArgs.urls.length > 20) {
-          throw new Error('URLs array must contain between 1 and 20 URLs');
-        }
-
-        // Validate and sanitize URLs
-        const validUrls: string[] = [];
-        for (const url of typedArgs.urls) {
-          if (typeof url !== 'string') {
-            throw new Error('All URLs must be strings');
-          }
-
-          const sanitizedUrl = sanitizeString(url, 2048);
-
-          // Basic URL validation
-          try {
-            const urlObj = new URL(sanitizedUrl);
-            if (!['http:', 'https:'].includes(urlObj.protocol)) {
-              throw new Error('Only HTTP and HTTPS URLs are allowed');
-            }
-            validUrls.push(sanitizedUrl);
-          } catch {
-            throw new Error(`Invalid URL: ${sanitizedUrl}`);
-          }
-        }
-
-        const livecrawl =
-          typedArgs.livecrawl && ['always', 'fallback', 'never'].includes(typedArgs.livecrawl)
-            ? (typedArgs.livecrawl as 'always' | 'fallback' | 'never')
-            : 'fallback';
-        const subpages =
-          typeof typedArgs.subpages === 'number' &&
-          typedArgs.subpages >= 0 &&
-          typedArgs.subpages <= 20
-            ? typedArgs.subpages
-            : 0;
-
-        const result = await runContentsTask(validUrls, {
-          livecrawl,
-          subpages,
-          timeout: 60000,
-          retries: 3,
-          taskId: `mcp-contents-${Date.now()}`,
-        });
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      default:
-        throw new Error(`Unknown tool: ${name}`);
-    }
+    validateToolArgs(typedArgs);
+    return await routeToolCall(name, typedArgs);
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              status: 'error',
-              error: errorMessage,
-              tool: name,
-              arguments: typedArgs,
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
+    return createErrorResponse(error, name, typedArgs);
   }
 });
 
-// HTTP Server implementation for testing
-async function startHttpServer(port: number) {
+// HTTP Server implementation
+
+/**
+ * Sets up CORS headers for HTTP response
+ */
+function setupCorsHeaders(res: any): void {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
+/**
+ * Handles HTTP OPTIONS request (CORS preflight)
+ */
+function handleOptionsRequest(res: any): boolean {
+  res.writeHead(200);
+  res.end();
+  return true;
+}
+
+/**
+ * Validates HTTP request method
+ */
+function validateHttpMethod(req: any, res: any): boolean {
+  if (req.method === 'OPTIONS') {
+    return handleOptionsRequest(res);
+  }
+
+  if (req.method !== 'POST') {
+    res.writeHead(405);
+    res.end('Method Not Allowed');
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Reads request body from HTTP request
+ */
+function readRequestBody(req: any): Promise<string> {
+  return new Promise((resolve) => {
+    let body = '';
+    req.on('data', (chunk: Buffer) => {
+      body += chunk.toString();
+    });
+    req.on('end', () => resolve(body));
+  });
+}
+
+/**
+ * Processes MCP request and returns response
+ */
+async function processMcpRequest(body: string): Promise<any> {
+  const request = JSON.parse(body);
+  const options = {
+    signal: AbortSignal.timeout(30000),
+  } as any;
+  return server.request(request, options);
+}
+
+/**
+ * Sends successful HTTP response
+ */
+function sendSuccessResponse(res: any, data: any): void {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(data));
+}
+
+/**
+ * Sends error HTTP response
+ */
+function sendErrorResponse(res: any, error: unknown): void {
+  console.error('HTTP MCP Error:', error);
+  res.writeHead(500, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({
+    jsonrpc: '2.0',
+    error: {
+      code: -32603,
+      message: 'Internal error',
+      data: error instanceof Error ? error.message : String(error)
+    }
+  }));
+}
+
+/**
+ * Handles incoming HTTP request
+ */
+async function handleHttpRequest(req: any, res: any): Promise<void> {
+  setupCorsHeaders(res);
+
+  if (!validateHttpMethod(req, res)) {
+    return;
+  }
+
+  try {
+    const body = await readRequestBody(req);
+    const response = await processMcpRequest(body);
+    sendSuccessResponse(res, response);
+  } catch (error) {
+    sendErrorResponse(res, error);
+  }
+}
+
+/**
+ * Starts HTTP server for MCP transport
+ */
+async function startHttpServer(port: number): Promise<void> {
   const { createServer } = await import('http');
 
   const httpServer = createServer(async (req, res) => {
-    // Enable CORS
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-    if (req.method === 'OPTIONS') {
-      res.writeHead(200);
-      res.end();
-      return;
-    }
-
-    if (req.method !== 'POST') {
-      res.writeHead(405);
-      res.end('Method Not Allowed');
-      return;
-    }
-
-    let body = '';
-    req.on('data', chunk => {
-      body += chunk.toString();
-    });
-
-    req.on('end', async () => {
-      try {
-        const request = JSON.parse(body);
-        const response = await server.request(request, {
-          signal: AbortSignal.timeout(30000),
-        });
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(response));
-      } catch (error) {
-        console.error('HTTP MCP Error:', error);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          jsonrpc: '2.0',
-          error: {
-            code: -32603,
-            message: 'Internal error',
-            data: error instanceof Error ? error.message : String(error)
-          }
-        }));
-      }
-    });
+    await handleHttpRequest(req, res);
   });
 
   return new Promise<void>((resolve, reject) => {
@@ -655,22 +805,42 @@ async function startHttpServer(port: number) {
   });
 }
 
-// Start the server
-async function main() {
+// Server startup
+
+/**
+ * Parses command line arguments for HTTP mode
+ */
+function parseServerArgs(): { httpMode: boolean; port: number } {
   const args = process.argv.slice(2);
   const portIndex = args.indexOf('--port');
   const httpMode = portIndex !== -1;
+  const port = httpMode ? parseInt(args[portIndex + 1]) || 3000 : 3000;
+
+  return { httpMode, port };
+}
+
+/**
+ * Starts stdio transport server
+ */
+async function startStdioServer(): Promise<void> {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.error('ExaFlow MCP server running on stdio');
+  }
+}
+
+/**
+ * Main server entry point
+ */
+async function main(): Promise<void> {
+  const { httpMode, port } = parseServerArgs();
 
   if (httpMode) {
-    const port = parseInt(args[portIndex + 1]) || 3000;
     await startHttpServer(port);
   } else {
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
-
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('ExaFlow MCP server running on stdio');
-    }
+    await startStdioServer();
   }
 }
 

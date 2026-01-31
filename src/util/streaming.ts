@@ -1,5 +1,8 @@
 import type { EventEnvelope } from '../schema';
 
+// Type for event metadata
+type EventMeta = Record<string, unknown>;
+
 export class EventStreamer {
   private taskId: string;
 
@@ -11,7 +14,7 @@ export class EventStreamer {
     level: EventEnvelope['level'],
     type: string,
     message: string,
-    meta?: Record<string, any>
+    meta?: EventMeta
   ): EventEnvelope {
     const event: EventEnvelope = {
       level,
@@ -33,40 +36,40 @@ export class EventStreamer {
     console.error(JSON.stringify(event));
   }
 
-  debug(message: string, meta?: Record<string, any>): void {
+  debug(message: string, meta?: EventMeta): void {
     const event = this.createEvent('debug', 'debug', message, meta);
     this.sendEvent(event);
   }
 
-  info(message: string, meta?: Record<string, any>): void {
+  info(message: string, meta?: EventMeta): void {
     const event = this.createEvent('info', 'info', message, meta);
     this.sendEvent(event);
   }
 
-  warn(message: string, meta?: Record<string, any>): void {
+  warn(message: string, meta?: EventMeta): void {
     const event = this.createEvent('warn', 'warn', message, meta);
     this.sendEvent(event);
   }
 
-  error(message: string, meta?: Record<string, any>): void {
+  error(message: string, meta?: EventMeta): void {
     const event = this.createEvent('error', 'error', message, meta);
     this.sendEvent(event);
   }
 
   // Specific event types for our use cases
-  started(taskType: string, meta?: Record<string, any>): void {
+  started(taskType: string, meta?: EventMeta): void {
     this.info(`Task started: ${taskType}`, { ...meta, taskType });
   }
 
-  progress(message: string, progress?: number, total?: number, meta?: Record<string, any>): void {
+  progress(message: string, progress?: number, total?: number, meta?: EventMeta): void {
     this.info(message, { progress, total, ...meta });
   }
 
-  completed(resultType: string, meta?: Record<string, any>): void {
+  completed(resultType: string, meta?: EventMeta): void {
     this.info(`Task completed: ${resultType}`, { ...meta, resultType });
   }
 
-  failed(error: Error | string, meta?: Record<string, any>): void {
+  failed(error: Error | string, meta?: EventMeta): void {
     const errorMessage = error instanceof Error ? error.message : error;
     const errorStack = error instanceof Error ? error.stack : undefined;
 
@@ -77,7 +80,7 @@ export class EventStreamer {
     });
   }
 
-  retry(attempt: number, maxAttempts: number, reason: string, meta?: Record<string, any>): void {
+  retry(attempt: number, maxAttempts: number, reason: string, meta?: EventMeta): void {
     this.warn(`Retry attempt ${attempt}/${maxAttempts}: ${reason}`, {
       attempt,
       maxAttempts,
@@ -87,7 +90,7 @@ export class EventStreamer {
   }
 
   // API-specific events
-  apiRequest(method: string, url: string, meta?: Record<string, any>): void {
+  apiRequest(method: string, url: string, meta?: EventMeta): void {
     this.debug(`API request: ${method} ${url}`, { method, url, ...meta });
   }
 
@@ -96,7 +99,7 @@ export class EventStreamer {
     url: string,
     status: number,
     duration: number,
-    meta?: Record<string, any>
+    meta?: EventMeta
   ): void {
     this.debug(`API response: ${method} ${url} (${status})`, {
       method,
@@ -108,7 +111,7 @@ export class EventStreamer {
   }
 
   // Async operation events
-  asyncStarted(operation: string, expectedDuration?: number, meta?: Record<string, any>): void {
+  asyncStarted(operation: string, expectedDuration?: number, meta?: EventMeta): void {
     this.info(`Async operation started: ${operation}`, {
       operation,
       expectedDuration,
@@ -120,7 +123,7 @@ export class EventStreamer {
     operation: string,
     attempt: number,
     status?: string,
-    meta?: Record<string, any>
+    meta?: EventMeta
   ): void {
     this.info(`Polling async operation: ${operation} (attempt ${attempt})`, {
       operation,
@@ -130,7 +133,7 @@ export class EventStreamer {
     });
   }
 
-  asyncCompleted(operation: string, result: any, meta?: Record<string, any>): void {
+  asyncCompleted(operation: string, result: unknown, meta?: EventMeta): void {
     this.info(`Async operation completed: ${operation}`, {
       operation,
       result,
@@ -139,7 +142,7 @@ export class EventStreamer {
   }
 
   // Webhook events
-  webhookReceived(eventType: string, payload: any, meta?: Record<string, any>): void {
+  webhookReceived(eventType: string, payload: unknown, meta?: EventMeta): void {
     this.info(`Webhook received: ${eventType}`, {
       eventType,
       payload,
@@ -147,7 +150,7 @@ export class EventStreamer {
     });
   }
 
-  webhookProcessed(eventType: string, success: boolean, meta?: Record<string, any>): void {
+  webhookProcessed(eventType: string, success: boolean, meta?: EventMeta): void {
     this.info(`Webhook processed: ${eventType}`, {
       eventType,
       success,
@@ -158,12 +161,12 @@ export class EventStreamer {
   // Concurrency events
   concurrencyUpdate(
     stats: { running: number; queued: number; completed: number },
-    meta?: Record<string, any>
+    meta?: EventMeta
   ): void {
     this.debug('Concurrency stats updated', { stats, ...meta });
   }
 
-  batchStarted(totalTasks: number, concurrency: number, meta?: Record<string, any>): void {
+  batchStarted(totalTasks: number, concurrency: number, meta?: EventMeta): void {
     this.info(`Batch started: ${totalTasks} tasks with concurrency ${concurrency}`, {
       totalTasks,
       concurrency,
@@ -171,11 +174,11 @@ export class EventStreamer {
     });
   }
 
-  batchProgress(completed: number, total: number, meta?: Record<string, any>): void {
+  batchProgress(completed: number, total: number, meta?: EventMeta): void {
     this.progress(`Batch progress: ${completed}/${total} tasks completed`, completed, total, meta);
   }
 
-  batchCompleted(totalTasks: number, totalDuration: number, meta?: Record<string, any>): void {
+  batchCompleted(totalTasks: number, totalDuration: number, meta?: EventMeta): void {
     this.info(`Batch completed: ${totalTasks} tasks in ${totalDuration}ms`, {
       totalTasks,
       totalDuration,
