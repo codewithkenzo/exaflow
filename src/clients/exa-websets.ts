@@ -137,7 +137,7 @@ export class ExaWebsetsClient extends BaseExaClient {
             createdAt: new Date().toISOString(),
             itemCount: 0,
           },
-        }
+        },
       }
     );
 
@@ -185,7 +185,7 @@ export class ExaWebsetsClient extends BaseExaClient {
             createdAt: new Date().toISOString(),
             resultCount: 0,
           },
-        }
+        },
       }
     );
 
@@ -240,7 +240,7 @@ export class ExaWebsetsClient extends BaseExaClient {
       {
         errorCode: 'WEBSET_ITEMS_ERROR',
         errorPrefix: 'Websets Items API',
-        fallbackData: { items: [], total: 0, page: 1, pageSize: 50 }
+        fallbackData: { items: [], total: 0, page: 1, pageSize: 50 },
       }
     );
 
@@ -302,7 +302,7 @@ export class ExaWebsetsClient extends BaseExaClient {
       {
         errorCode: 'WEBSET_ENRICH_ERROR',
         errorPrefix: 'Websets Enrichment API',
-        fallbackData: { message: 'Failed to start enrichment' }
+        fallbackData: { message: 'Failed to start enrichment' },
       }
     );
 
@@ -357,7 +357,7 @@ export class ExaWebsetsClient extends BaseExaClient {
               status: 'failed' as const,
               createdAt: new Date().toISOString(),
               resultCount: 0,
-            }
+            },
           }
         );
 
@@ -373,16 +373,16 @@ export class ExaWebsetsClient extends BaseExaClient {
           return {
             status: 'failed',
             error: 'Search operation failed',
-            data: search
+            data: search,
           };
         }
 
         return { status: search.status };
       },
       // Completion check
-      (status) => status === 'completed',
+      status => status === 'completed',
       // Failure check
-      (status) => status === 'failed',
+      status => status === 'failed',
       actualTaskId,
       streamer,
       startTime,

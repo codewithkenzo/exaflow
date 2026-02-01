@@ -31,7 +31,9 @@ describe('Path Validation Security', () => {
     it('should block simple traversal with ..', () => {
       expect(() => fsSandbox.validatePath('../etc/passwd')).toThrow(FileSystemError);
       expect(() => fsSandbox.validatePath('foo/../../../etc/passwd')).toThrow(FileSystemError);
-      expect(() => fsSandbox.validatePath(path.join(testDir, '../outside'))).toThrow(FileSystemError);
+      expect(() => fsSandbox.validatePath(path.join(testDir, '../outside'))).toThrow(
+        FileSystemError
+      );
     });
 
     it('should block traversal with tilde ~', () => {
@@ -44,19 +46,27 @@ describe('Path Validation Security', () => {
     });
 
     it('should block paths that escape after normalization', () => {
-      expect(() => fsSandbox.validatePath(path.join(testDir, 'foo/../bar/../../etc/passwd'))).toThrow(FileSystemError);
+      expect(() =>
+        fsSandbox.validatePath(path.join(testDir, 'foo/../bar/../../etc/passwd'))
+      ).toThrow(FileSystemError);
     });
   });
 
   describe('URL-Encoded Path Prevention', () => {
     it('should block URL-encoded traversal sequences', () => {
       expect(() => fsSandbox.validatePath('..%2F..%2Fetc%2Fpasswd')).toThrow(FileSystemError);
-      expect(() => fsSandbox.validatePath('%2e%2e%2f%2e%2e%2fetc%2fpasswd')).toThrow(FileSystemError);
-      expect(() => fsSandbox.validatePath('%2e%2e%2f%2e%2e%2f%2e%2e%2fshadow')).toThrow(FileSystemError);
+      expect(() => fsSandbox.validatePath('%2e%2e%2f%2e%2e%2fetc%2fpasswd')).toThrow(
+        FileSystemError
+      );
+      expect(() => fsSandbox.validatePath('%2e%2e%2f%2e%2e%2f%2e%2e%2fshadow')).toThrow(
+        FileSystemError
+      );
     });
 
     it('should block double-encoded traversal', () => {
-      expect(() => fsSandbox.validatePath('%252e%252e%252fetc%252fpasswd')).toThrow(FileSystemError);
+      expect(() => fsSandbox.validatePath('%252e%252e%252fetc%252fpasswd')).toThrow(
+        FileSystemError
+      );
     });
 
     it('should decode URL-encoded filenames within sandbox', () => {
@@ -128,7 +138,9 @@ describe('Path Validation Security', () => {
 
     it('should handle current directory reference', () => {
       expect(() => fsSandbox.validatePath(path.join(testDir, './file.txt'))).not.toThrow();
-      expect(() => fsSandbox.validatePath(path.join(testDir, './../etc/passwd'))).toThrow(FileSystemError);
+      expect(() => fsSandbox.validatePath(path.join(testDir, './../etc/passwd'))).toThrow(
+        FileSystemError
+      );
     });
   });
 });

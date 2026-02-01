@@ -300,7 +300,9 @@ function validateDate(dateString: string): void {
 /**
  * Creates standardized success response
  */
-function createSuccessResponse(result: unknown): { content: Array<{ type: string; text: string }> } {
+function createSuccessResponse(result: unknown): {
+  content: Array<{ type: string; text: string }>;
+} {
   return {
     content: [
       {
@@ -345,9 +347,7 @@ function createErrorResponse(
  */
 function extractSearchType(args: Record<string, any>): 'auto' | 'keyword' | 'neural' | 'fast' {
   const validTypes = ['auto', 'keyword', 'neural', 'fast'];
-  return args.searchType && validTypes.includes(args.searchType)
-    ? args.searchType
-    : 'neural';
+  return args.searchType && validTypes.includes(args.searchType) ? args.searchType : 'neural';
 }
 
 /**
@@ -490,9 +490,7 @@ function validateAndSanitizeUrls(args: Record<string, any>): string[] {
  */
 function extractLivecrawlMode(args: Record<string, any>): 'always' | 'fallback' | 'never' {
   const validModes = ['always', 'fallback', 'never'];
-  return args.livecrawl && validModes.includes(args.livecrawl)
-    ? args.livecrawl
-    : 'fallback';
+  return args.livecrawl && validModes.includes(args.livecrawl) ? args.livecrawl : 'fallback';
 }
 
 /**
@@ -726,7 +724,7 @@ function validateHttpMethod(req: any, res: any): boolean {
  * Reads request body from HTTP request
  */
 function readRequestBody(req: any): Promise<string> {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     let body = '';
     req.on('data', (chunk: Buffer) => {
       body += chunk.toString();
@@ -752,14 +750,16 @@ function sendSuccessResponse(res: any, data: any): void {
 function sendErrorResponse(res: any, error: unknown): void {
   console.error('HTTP MCP Error:', error);
   res.writeHead(500, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({
-    jsonrpc: '2.0',
-    error: {
-      code: -32603,
-      message: 'Internal error',
-      data: error instanceof Error ? error.message : String(error)
-    }
-  }));
+  res.end(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      error: {
+        code: -32603,
+        message: 'Internal error',
+        data: error instanceof Error ? error.message : String(error),
+      },
+    })
+  );
 }
 
 /**
@@ -819,12 +819,14 @@ async function startHttpServer(port: number): Promise<void> {
   });
 
   return new Promise<void>((resolve, reject) => {
-    httpServer.listen(port, () => {
-      if (process.env.NODE_ENV !== 'production') {
-        console.error(`ExaFlow MCP server running on HTTP port ${port}`);
-      }
-      resolve();
-    }).on('error', reject);
+    httpServer
+      .listen(port, () => {
+        if (process.env.NODE_ENV !== 'production') {
+          console.error(`ExaFlow MCP server running on HTTP port ${port}`);
+        }
+        resolve();
+      })
+      .on('error', reject);
   });
 }
 

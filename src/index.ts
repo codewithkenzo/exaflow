@@ -1,5 +1,13 @@
 import { z } from 'zod';
-import { EnhancedTask, ResultEnvelope, ContextTaskSchema, SearchTaskSchema, ContentsTaskSchema, WebsetTaskSchema, ResearchTaskSchema } from './schema';
+import {
+  EnhancedTask,
+  ResultEnvelope,
+  ContextTaskSchema,
+  SearchTaskSchema,
+  ContentsTaskSchema,
+  WebsetTaskSchema,
+  ResearchTaskSchema,
+} from './schema';
 import { executeWithOrdering } from './util/concurrency';
 import { createEventStreamer, streamResult } from './util/streaming';
 import { loadEnv } from './env';
@@ -23,23 +31,38 @@ export async function runTask(task: EnhancedTask): Promise<ResultEnvelope> {
   try {
     switch (task.type) {
       case 'context': {
-        const contextTask = task as z.infer<typeof ContextTaskSchema> & { timeout: number; retries: number };
+        const contextTask = task as z.infer<typeof ContextTaskSchema> & {
+          timeout: number;
+          retries: number;
+        };
         return await exaContextClient.executeTask(contextTask);
       }
       case 'search': {
-        const searchTask = task as z.infer<typeof SearchTaskSchema> & { timeout: number; retries: number };
+        const searchTask = task as z.infer<typeof SearchTaskSchema> & {
+          timeout: number;
+          retries: number;
+        };
         return await exaSearchClient.executeTask(searchTask);
       }
       case 'contents': {
-        const contentsTask = task as z.infer<typeof ContentsTaskSchema> & { timeout: number; retries: number };
+        const contentsTask = task as z.infer<typeof ContentsTaskSchema> & {
+          timeout: number;
+          retries: number;
+        };
         return await exaContentsClient.executeTask(contentsTask);
       }
       case 'websets': {
-        const websetTask = task as z.infer<typeof WebsetTaskSchema> & { timeout: number; retries: number };
+        const websetTask = task as z.infer<typeof WebsetTaskSchema> & {
+          timeout: number;
+          retries: number;
+        };
         return await exaWebsetsClient.executeTask(websetTask);
       }
       case 'research': {
-        const researchTask = task as z.infer<typeof ResearchTaskSchema> & { timeout: number; retries: number };
+        const researchTask = task as z.infer<typeof ResearchTaskSchema> & {
+          timeout: number;
+          retries: number;
+        };
         return await exaResearchClient.executeTask(researchTask);
       }
       default:

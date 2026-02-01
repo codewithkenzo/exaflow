@@ -89,7 +89,7 @@ export class ExaSearchClient extends BaseExaClient {
       {
         errorCode: 'SEARCH_API_ERROR',
         errorPrefix: 'Search API',
-        fallbackData: { results: [], query: '' }
+        fallbackData: { results: [], query: '' },
       }
     );
 

@@ -35,10 +35,10 @@ function redactSensitiveValues(obj: unknown): unknown {
     const redacted: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
       const lowerKey = key.toUpperCase();
-      
+
       // Check if key matches any sensitive pattern
-      const isSensitiveKey = Array.from(SENSITIVE_ENV_VARS).some(
-        sensitive => lowerKey.includes(sensitive.toLowerCase())
+      const isSensitiveKey = Array.from(SENSITIVE_ENV_VARS).some(sensitive =>
+        lowerKey.includes(sensitive.toLowerCase())
       );
 
       if (isSensitiveKey) {
@@ -98,7 +98,7 @@ export class EventStreamer {
     // Redact sensitive values before logging
     const safeEvent = {
       ...event,
-      meta: event.meta ? redactSensitiveValues(event.meta) as EventMeta : undefined,
+      meta: event.meta ? (redactSensitiveValues(event.meta) as EventMeta) : undefined,
     };
     // Send to stderr as JSONL
     console.error(JSON.stringify(safeEvent));
@@ -187,12 +187,7 @@ export class EventStreamer {
     });
   }
 
-  asyncPolling(
-    operation: string,
-    attempt: number,
-    status?: string,
-    meta?: EventMeta
-  ): void {
+  asyncPolling(operation: string, attempt: number, status?: string, meta?: EventMeta): void {
     this.info(`Polling async operation: ${operation} (attempt ${attempt})`, {
       operation,
       attempt,
