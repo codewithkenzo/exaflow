@@ -125,6 +125,7 @@ jobs:
       if: matrix.package-manager == 'bun'
       run: |
         bun install -g .
+        export PATH="$HOME/.bun/bin:$PATH"
         exaflow --version
         exaflow-mcp --help
 
