@@ -48,7 +48,7 @@ export class SandboxedFileSystem {
     this.maxFileSize = maxFileSize;
   }
 
-  private validatePath(path: string): string {
+  public validatePath(path: string): string {
     // Decode URL-encoded paths to prevent bypass via encoding
     let decodedPath = path;
     try {
