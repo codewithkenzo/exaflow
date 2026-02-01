@@ -335,16 +335,18 @@ async function extractUrls(options: { stdin?: boolean; ids?: string }): Promise<
   return urls;
 }
 
-// Load environment with error handling
-try {
-  loadEnv();
-} catch (error) {
-  console.error(
-    'Failed to load environment:',
-    error instanceof Error ? error.message : String(error)
-  );
-  console.error('Please ensure EXA_API_KEY is set in your environment or .env file');
-  process.exit(1);
+// Helper to ensure environment is loaded before command execution
+function ensureEnv(): void {
+  try {
+    loadEnv();
+  } catch (error) {
+    console.error(
+      'Failed to load environment:',
+      error instanceof Error ? error.message : String(error)
+    );
+    console.error('Please ensure EXA_API_KEY is set in your environment or .env file');
+    process.exit(1);
+  }
 }
 
 const program = new Command();
@@ -352,7 +354,7 @@ const program = new Command();
 program
   .name('exaflow')
   .description('ExaFlow: Advanced Semantic Search Tool with MCP Server Integration')
-  .version('2.2.1');
+  .version('2.4.0');
 
 // Global options
 program
@@ -368,13 +370,11 @@ program
   .option('--port <number>', 'Port for HTTP transport (default: stdio)', '3000')
   .option('--transport <type>', 'Transport type: stdio or http', 'stdio')
   .action(async options => {
+    ensureEnv();
     try {
       if (options.transport === 'http') {
-        // Start HTTP transport server
-        // HTTP transport implementation would go here
         process.exit(1);
       } else {
-        // Start stdio transport server (default)
         console.error('Starting ExaFlow MCP server with stdio transport...');
 
         // Execute the MCP server with hardcoded command to prevent injection
@@ -428,6 +428,7 @@ program
   .option('--tokens <number>', 'Number of tokens for response', '5000')
   .option('--timeout <number>', 'Request timeout in milliseconds')
   .action(async (query: string, options: CommandOptions, command: unknown) => {
+    ensureEnv();
     const { globalOptions, streamer, timeout: globalTimeout } = createCommandContext(command);
 
     try {
@@ -549,6 +550,7 @@ program
   .option('--start-date <date>', 'Start date filter (ISO 8601)')
   .option('--end-date <date>', 'End date filter (ISO 8601)')
   .action(async (query: string | undefined, options: CommandOptions, command: unknown) => {
+    ensureEnv();
     const context = createCommandContext(command);
 
     try {
@@ -569,6 +571,7 @@ program
   .option('--subpages <number>', 'Number of subpages to crawl', '0')
   .option('--subpage-target <items>', 'Target subpage sections (comma-separated)')
   .action(async (options: CommandOptions, command: unknown) => {
+    ensureEnv();
     const { globalOptions, streamer, timeout } = createCommandContext(command);
 
     try {
@@ -603,6 +606,7 @@ program
   .option('--webhook', 'Use webhook mode for async operations', false)
   .option('--poll', 'Poll for completion (works with create and search)', false)
   .action(async (operation: string, options: CommandOptions, command: unknown) => {
+    ensureEnv();
     const { globalOptions, streamer, timeout } = createCommandContext(command);
 
     try {
@@ -709,6 +713,7 @@ program
   .option('--task-id <id>', 'Task ID for get operation')
   .option('--poll', 'Poll for completion (works with create)', false)
   .action(async (operation: string = 'create', options: CommandOptions, command: unknown) => {
+    ensureEnv();
     const context = createCommandContext(command);
 
     try {
