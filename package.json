@@ -1,5 +1,5 @@
 {
-  "name": "exaflow",
+  "name": "@codewithkenzo/exaflow",
   "version": "2.2.1",
   "description": "🚀 Advanced semantic search & AI integration toolkit with Exa API and MCP server support",
   "main": "dist/index.js",
@@ -9,6 +9,9 @@
     "exaflow-mcp": "dist/mcp-server.js"
   },
   "private": false,
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "scripts": {
     "build": "bun build src/index.ts --outdir dist --target bun && bun build src/cli.ts --outdir dist --target bun && bun build src/mcp-server.ts --outdir dist --target bun",
     "dev": "bunx tsx src/cli.ts",
