@@ -5,9 +5,9 @@
 <div align="center">
 
 [![npm version](https://img.shields.io/npm/v/exaflow)](https://www.npmjs.com/package/exaflow)
-[![npm downloads](https://img.shields.io/npm/dt/exaflow)](https://www.npmjs.com/package/exaflow)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-100%25-blue.svg)](https://www.typescriptlang.org/)
+[![Bun](https://img.shields.io/badge/Bun-1.0+-f9f1e1.svg)](https://bun.sh)
 
 **AI-Powered Search • Intelligent Content • MCP Integration • Lightning Fast**
 
