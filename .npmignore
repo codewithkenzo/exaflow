@@ -20,6 +20,11 @@ bun.config.ts
 tsconfig.json
 prettier.config.js
 .eslintrc.js
+.prettierrc
+.prettierignore
+.greptile.yaml
+.sisyphus/
+assets/
 
 # Environment and cache
 .env
@@ -89,7 +94,6 @@ jspm_packages/
 
 # Nuxt.js build / generate output
 .nuxt
-dist
 
 # Gatsby files
 .cache/

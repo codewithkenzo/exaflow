@@ -17,10 +17,13 @@ import { exaContentsClient } from './clients/exa-contents';
 import { exaWebsetsClient } from './clients/exa-websets';
 import { exaResearchClient } from './clients/exa-research';
 
-// Load environment
-loadEnv();
+// Lazy load environment - called by functions that need it
+function ensureEnv(): void {
+  loadEnv();
+}
 
 export async function runTask(task: EnhancedTask): Promise<ResultEnvelope> {
+  ensureEnv();
   const streamer = createEventStreamer(task.id || `task-${Date.now()}`);
 
   streamer.started(task.type, {
@@ -95,6 +98,7 @@ export async function runBatch(
   concurrency: number = 5,
   preserveOrder: boolean = true
 ): Promise<ResultEnvelope[]> {
+  ensureEnv();
   const streamer = createEventStreamer(`batch-${Date.now()}`);
   const startTime = Date.now();
 

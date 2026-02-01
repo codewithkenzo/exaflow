@@ -5,6 +5,24 @@ All notable changes to ExaFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-02-01
+
+### 🔧 Build & Compatibility
+- **Build Target**: Changed from `--target bun` to `--target node` for npm compatibility
+- **Package Name**: Renamed to unscoped `exaflow` for simpler installation
+
+### 📦 Cleanup
+- Removed redundant `coverage.yml` workflow (already covered in `ci.yml`)
+- Removed legacy files: `bun.config.ts`, shell scripts, `scripts/` directory
+- Removed `.tool-contract.json`, `API.md`, `PKGBUILD`
+
+### 📄 Documentation
+- New logo in `assets/logo.png`
+- Polished README with shields.io badges
+- Fixed prettier formatting in `src/util/http.ts`
+
+---
+
 ## [2.2.0] - 2026-02-01
 
 ### 🐛 Bug Fixes
