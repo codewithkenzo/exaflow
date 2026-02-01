@@ -2,10 +2,12 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   Tool,
+  isInitializeRequest,
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { runTask, runContextTask, runSearchTask, runContentsTask } from './index.js';
@@ -298,7 +300,9 @@ function validateDate(dateString: string): void {
 /**
  * Creates standardized success response
  */
-function createSuccessResponse(result: unknown): { content: Array<{ type: string; text: string }> } {
+function createSuccessResponse(result: unknown): {
+  content: Array<{ type: string; text: string }>;
+} {
   return {
     content: [
       {
@@ -343,9 +347,7 @@ function createErrorResponse(
  */
 function extractSearchType(args: Record<string, any>): 'auto' | 'keyword' | 'neural' | 'fast' {
   const validTypes = ['auto', 'keyword', 'neural', 'fast'];
-  return args.searchType && validTypes.includes(args.searchType)
-    ? args.searchType
-    : 'neural';
+  return args.searchType && validTypes.includes(args.searchType) ? args.searchType : 'neural';
 }
 
 /**
@@ -488,9 +490,7 @@ function validateAndSanitizeUrls(args: Record<string, any>): string[] {
  */
 function extractLivecrawlMode(args: Record<string, any>): 'always' | 'fallback' | 'never' {
   const validModes = ['always', 'fallback', 'never'];
-  return args.livecrawl && validModes.includes(args.livecrawl)
-    ? args.livecrawl
-    : 'fallback';
+  return args.livecrawl && validModes.includes(args.livecrawl) ? args.livecrawl : 'fallback';
 }
 
 /**
@@ -724,7 +724,7 @@ function validateHttpMethod(req: any, res: any): boolean {
  * Reads request body from HTTP request
  */
 function readRequestBody(req: any): Promise<string> {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     let body = '';
     req.on('data', (chunk: Buffer) => {
       body += chunk.toString();
@@ -733,18 +733,8 @@ function readRequestBody(req: any): Promise<string> {
   });
 }
 
-/**
- * Processes MCP request and returns response
- */
-async function processMcpRequest(body: string): Promise<any> {
-  const request = JSON.parse(body, (key, value) => {
-    if (['__proto__', 'constructor', 'prototype'].includes(key)) {
-      throw new Error(`Dangerous key "${key}" blocked`);
-    }
-    return value;
-  });
-  return server.request(request, { signal: AbortSignal.timeout(30000) });
-}
+// HTTP transport instance (created per session)
+let httpTransport: StreamableHTTPServerTransport | null = null;
 
 /**
  * Sends successful HTTP response
@@ -760,30 +750,59 @@ function sendSuccessResponse(res: any, data: any): void {
 function sendErrorResponse(res: any, error: unknown): void {
   console.error('HTTP MCP Error:', error);
   res.writeHead(500, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({
-    jsonrpc: '2.0',
-    error: {
-      code: -32603,
-      message: 'Internal error',
-      data: error instanceof Error ? error.message : String(error)
-    }
-  }));
+  res.end(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      error: {
+        code: -32603,
+        message: 'Internal error',
+        data: error instanceof Error ? error.message : String(error),
+      },
+    })
+  );
 }
 
 /**
- * Handles incoming HTTP request
+ * Handles incoming HTTP request using StreamableHTTPServerTransport
  */
 async function handleHttpRequest(req: any, res: any): Promise<void> {
   setupCorsHeaders(res);
 
-  if (!validateHttpMethod(req, res)) {
+  if (req.method === 'OPTIONS') {
+    handleOptionsRequest(res);
+    return;
+  }
+
+  // Only accept POST for MCP requests
+  if (req.method !== 'POST') {
+    res.writeHead(405);
+    res.end('Method Not Allowed');
     return;
   }
 
   try {
     const body = await readRequestBody(req);
-    const response = await processMcpRequest(body);
-    sendSuccessResponse(res, response);
+    const parsedBody = JSON.parse(body, (key, value) => {
+      // Prototype pollution protection
+      if (['__proto__', 'constructor', 'prototype'].includes(key)) {
+        throw new Error(`Dangerous key "${key}" blocked`);
+      }
+      return value;
+    });
+
+    // Create new transport for initialize requests or if none exists
+    if (!httpTransport || isInitializeRequest(parsedBody)) {
+      httpTransport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined, // Stateless mode
+        enableJsonResponse: true, // Return JSON directly instead of SSE
+      });
+
+      // Connect server to transport
+      await server.connect(httpTransport);
+    }
+
+    // Handle the request through the transport
+    await httpTransport.handleRequest(req, res, parsedBody);
   } catch (error) {
     sendErrorResponse(res, error);
   }
@@ -800,12 +819,14 @@ async function startHttpServer(port: number): Promise<void> {
   });
 
   return new Promise<void>((resolve, reject) => {
-    httpServer.listen(port, () => {
-      if (process.env.NODE_ENV !== 'production') {
-        console.error(`ExaFlow MCP server running on HTTP port ${port}`);
-      }
-      resolve();
-    }).on('error', reject);
+    httpServer
+      .listen(port, () => {
+        if (process.env.NODE_ENV !== 'production') {
+          console.error(`ExaFlow MCP server running on HTTP port ${port}`);
+        }
+        resolve();
+      })
+      .on('error', reject);
   });
 }
 

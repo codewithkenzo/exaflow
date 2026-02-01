@@ -85,11 +85,7 @@ export class ExaContextClient extends BaseExaClient {
     } = {}
   ): Promise<ResultEnvelope<ContextResponse>> {
     const finalTaskId = this.getTaskId(options.taskId, 'context-query');
-    return this.getContext(
-      query,
-      options.tokens || 5000,
-      finalTaskId
-    );
+    return this.getContext(query, options.tokens || 5000, finalTaskId);
   }
 }
 

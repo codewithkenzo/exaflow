@@ -89,7 +89,7 @@ export class ExaContentsClient extends BaseExaClient {
       {
         errorCode: 'CONTENTS_API_ERROR',
         errorPrefix: 'Contents API',
-        fallbackData: { results: [] }
+        fallbackData: { results: [] },
       }
     );
 

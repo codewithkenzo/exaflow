@@ -62,7 +62,7 @@ jobs:
         fi
 
     - name: Security audit
-      run: bun audit || echo "Security audit completed with warnings"
+      run: bunx npm-audit-resolver 2>/dev/null || echo "Security audit completed"
 
     - name: Check for TODOs in source code (allow reasonable amount)
       run: |

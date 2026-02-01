@@ -13,7 +13,10 @@ interface HttpOptions {
 
 // Import connection pool for HTTP/2 support and connection pooling
 // Use type-only import to avoid runtime issues if undici is not available
-type PoolType = new (origin: string, options: { connections: number }) => {
+type PoolType = new (
+  origin: string,
+  options: { connections: number }
+) => {
   request: (options: {
     method: string;
     path: string;
@@ -303,7 +306,7 @@ export class CachedHttpClient {
 
         // Handle undici response which might have different structure
         const undiciBody = undiciResponse.body ?? null;
-        
+
         // Safely convert undici body to fetch BodyInit
         let body: BodyInit | null = null;
         if (undiciBody !== null) {
@@ -314,20 +317,20 @@ export class CachedHttpClient {
               start(controller) {
                 controller.enqueue(undiciBody);
                 controller.close();
-              }
+              },
             });
           } else if (Buffer.isBuffer(undiciBody)) {
             body = new ReadableStream({
               start(controller) {
                 controller.enqueue(new Uint8Array(undiciBody));
                 controller.close();
-              }
+              },
             });
           } else {
             body = null;
           }
         }
-        
+
         response = new Response(body, {
           status: undiciResponse.statusCode || 200,
           statusText: undiciResponse.reasonPhrase || 'OK',

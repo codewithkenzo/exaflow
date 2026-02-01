@@ -17,6 +17,7 @@ export class ConcurrencyPool<T> {
     reject: (error: Error) => void;
   }> = [];
   private pendingResults = new Map<number, ConcurrencyResult<T>>();
+  private resolvers = new Map<number, (result: ConcurrencyResult<T>) => void>();
   private nextIndex = 0;
 
   constructor(maxConcurrency: number, preserveOrder = true) {
@@ -74,7 +75,8 @@ export class ConcurrencyPool<T> {
 
       if (this.preserveOrder) {
         this.pendingResults.set(index, concurrencyResult);
-        this.drainPending(resolve);
+        this.resolvers.set(index, resolve);
+        this.drainPending();
       } else {
         resolve(concurrencyResult);
       }
@@ -86,10 +88,12 @@ export class ConcurrencyPool<T> {
     }
   }
 
-  private drainPending(resolve: (result: ConcurrencyResult<T>) => void): void {
+  private drainPending(): void {
     while (this.pendingResults.has(this.nextIndex)) {
       const result = this.pendingResults.get(this.nextIndex)!;
+      const resolve = this.resolvers.get(this.nextIndex)!;
       this.pendingResults.delete(this.nextIndex);
+      this.resolvers.delete(this.nextIndex);
       this.nextIndex++;
       resolve(result);
     }

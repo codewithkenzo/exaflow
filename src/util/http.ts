@@ -285,12 +285,12 @@ export class HttpClient {
               ...headers,
             };
 
-            const undiciResponse = await this.pool.request(url, {
+            const undiciResponse = (await this.pool.request(url, {
               method,
               headers: requestHeaders,
               body,
               signal: controller.signal,
-            }) as {
+            })) as {
               body: unknown;
               statusCode: number;
               reasonPhrase: string;
@@ -300,7 +300,7 @@ export class HttpClient {
             // Convert undici response to fetch Response
             // Handle undici response which might have different structure
             const undiciBody = undiciResponse.body ?? null;
-            
+
             // Safely convert undici body to fetch BodyInit
             let responseBody: BodyInit | null = null;
             if (undiciBody !== null) {
@@ -311,20 +311,20 @@ export class HttpClient {
                   start(controller) {
                     controller.enqueue(undiciBody);
                     controller.close();
-                  }
+                  },
                 });
               } else if (Buffer.isBuffer(undiciBody)) {
                 responseBody = new ReadableStream({
                   start(controller) {
                     controller.enqueue(new Uint8Array(undiciBody));
                     controller.close();
-                  }
+                  },
                 });
               } else {
                 responseBody = null;
               }
             }
-            
+
             response = new Response(responseBody, {
               status: undiciResponse.statusCode || 200,
               statusText: undiciResponse.reasonPhrase || 'OK',

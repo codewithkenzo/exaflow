@@ -134,7 +134,9 @@ function processResult(result: unknown, globalOptions: GlobalOptions): number {
   } else {
     streamResult(result);
   }
-  return result && typeof result === 'object' && 'status' in result && result.status === 'error' ? 1 : 0;
+  return result && typeof result === 'object' && 'status' in result && result.status === 'error'
+    ? 1
+    : 0;
 }
 
 /**
@@ -210,14 +212,15 @@ async function processInputFileQueries(
       ? // Array of query strings
         inputData.map((q, index) => createSearchTask(q, options, timeout, `${baseTaskId}-${index}`))
       : // Array of task objects
-        inputData.map((task, index) =>
-          EnhancedTaskSchema.parse({
-            ...task,
-            type: 'search',
-            timeout: task.timeout || timeout,
-            retries: task.retries || 3,
-            id: task.id || `${baseTaskId}-${index}`,
-          }) as EnhancedTask
+        inputData.map(
+          (task, index) =>
+            EnhancedTaskSchema.parse({
+              ...task,
+              type: 'search',
+              timeout: task.timeout || timeout,
+              retries: task.retries || 3,
+              id: task.id || `${baseTaskId}-${index}`,
+            }) as EnhancedTask
         );
   } else if (
     inputData &&
@@ -226,15 +229,18 @@ async function processInputFileQueries(
     Array.isArray((inputData as { tasks: unknown }).tasks)
   ) {
     // Object with tasks array
-    const dataWithTasks = inputData as { tasks: Array<{ timeout?: number; retries?: number; id?: string } & Record<string, unknown>> };
-    return dataWithTasks.tasks.map((task, index) =>
-      EnhancedTaskSchema.parse({
-        ...task,
-        type: 'search',
-        timeout: task.timeout || timeout,
-        retries: task.retries || 3,
-        id: task.id || `${baseTaskId}-${index}`,
-      }) as EnhancedTask
+    const dataWithTasks = inputData as {
+      tasks: Array<{ timeout?: number; retries?: number; id?: string } & Record<string, unknown>>;
+    };
+    return dataWithTasks.tasks.map(
+      (task, index) =>
+        EnhancedTaskSchema.parse({
+          ...task,
+          type: 'search',
+          timeout: task.timeout || timeout,
+          retries: task.retries || 3,
+          id: task.id || `${baseTaskId}-${index}`,
+        }) as EnhancedTask
     );
   } else {
     throw new Error('Invalid input file format');

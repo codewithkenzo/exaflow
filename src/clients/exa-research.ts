@@ -107,7 +107,7 @@ export class ExaResearchClient extends BaseExaClient {
           model: '',
           createdAt: new Date().toISOString(),
           error: 'Failed to create research task',
-        }
+        },
       }
     );
 
@@ -152,7 +152,7 @@ export class ExaResearchClient extends BaseExaClient {
           model: '',
           createdAt: new Date().toISOString(),
           error: 'Failed to get research task',
-        }
+        },
       }
     );
 
@@ -216,7 +216,7 @@ export class ExaResearchClient extends BaseExaClient {
           total: 0,
           page: 1,
           pageSize: 20,
-        }
+        },
       }
     );
 
@@ -294,16 +294,16 @@ export class ExaResearchClient extends BaseExaClient {
               taskId: researchTask.id,
               status: 'failed',
               error: researchTask.error || 'Unknown error',
-            }
+            },
           };
         }
 
         return { status: researchTask.status };
       },
       // Completion check
-      (status) => status === 'completed',
+      status => status === 'completed',
       // Failure check
-      (status) => status === 'failed',
+      status => status === 'failed',
       actualTaskId,
       streamer,
       startTime,
