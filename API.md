@@ -612,5 +612,5 @@ async function safeSearch(query: string) {
 
 For API support and questions:
 - **Documentation**: [README.md](README.md)
-- **Issues**: [GitHub Issues](https://github.com/codewithkenzo/exa-personal-tool/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/codewithkenzo/exa-personal-tool/discussions)
+- **Issues**: [GitHub Issues](https://github.com/codewithkenzo/exaflow/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/codewithkenzo/exaflow/discussions)
