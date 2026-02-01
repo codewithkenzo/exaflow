@@ -211,5 +211,5 @@ Thanks to all contributors and users who helped shape ExaFlow:
 
 For migration help and support:
 - **Documentation**: [README.md](README.md)
-- **Issues**: [GitHub Issues](https://github.com/codewithkenzo/exa-personal-tool/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/codewithkenzo/exa-personal-tool/discussions)
+- **Issues**: [GitHub Issues](https://github.com/codewithkenzo/exaflow/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/codewithkenzo/exaflow/discussions)

@@ -1,7 +1,7 @@
 # ExaFlow: Advanced Semantic Search & AI Integration
 
 [![npm version](https://badge.fury.io/js/exaflow.svg)](https://badge.fury.io/js/exaflow)
-[![Build Status](https://github.com/codewithkenzo/exa-personal-tool/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/codewithkenzo/exa-personal-tool/actions)
+[![Build Status](https://github.com/codewithkenzo/exaflow/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/codewithkenzo/exaflow/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-100%25-blue.svg)](https://www.typescriptlang.org/)
 
@@ -193,5 +193,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/codewithkenzo/exa-personal-tool/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/codewithkenzo/exa-personal-tool/discussions)
+- **Issues**: [GitHub Issues](https://github.com/codewithkenzo/exaflow/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/codewithkenzo/exaflow/discussions)
