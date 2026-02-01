@@ -18,7 +18,7 @@ import { runTask, runContextTask, runSearchTask, runContentsTask } from './index
 const server = new Server(
   {
     name: 'exaflow',
-    version: '2.2.0',
+    version: '2.4.0',
   },
   {
     capabilities: {
