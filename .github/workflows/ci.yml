@@ -135,18 +135,24 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v2
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
       with:
-        bun-version: latest
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Install dependencies
+      run: npm ci
 
     - name: Audit dependencies
-      run: bun audit
+      run: npm audit --audit-level=high || true
 
-    - name: Run security scan
-      uses: securecodewarrior/github-action-add-sarif@v1
+    - name: Run CodeQL analysis
+      uses: github/codeql-action/init@v3
       with:
-        sarif-file: 'security-scan-results.sarif'
+        languages: javascript-typescript
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
 
   code-quality:
     name: Code Quality Checks

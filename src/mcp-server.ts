@@ -2,10 +2,12 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   Tool,
+  isInitializeRequest,
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { runTask, runContextTask, runSearchTask, runContentsTask } from './index.js';
@@ -733,18 +735,8 @@ function readRequestBody(req: any): Promise<string> {
   });
 }
 
-/**
- * Processes MCP request and returns response
- */
-async function processMcpRequest(body: string): Promise<any> {
-  const request = JSON.parse(body, (key, value) => {
-    if (['__proto__', 'constructor', 'prototype'].includes(key)) {
-      throw new Error(`Dangerous key "${key}" blocked`);
-    }
-    return value;
-  });
-  return server.request(request, { signal: AbortSignal.timeout(30000) });
-}
+// HTTP transport instance (created per session)
+let httpTransport: StreamableHTTPServerTransport | null = null;
 
 /**
  * Sends successful HTTP response
@@ -771,19 +763,46 @@ function sendErrorResponse(res: any, error: unknown): void {
 }
 
 /**
- * Handles incoming HTTP request
+ * Handles incoming HTTP request using StreamableHTTPServerTransport
  */
 async function handleHttpRequest(req: any, res: any): Promise<void> {
   setupCorsHeaders(res);
 
-  if (!validateHttpMethod(req, res)) {
+  if (req.method === 'OPTIONS') {
+    handleOptionsRequest(res);
+    return;
+  }
+
+  // Only accept POST for MCP requests
+  if (req.method !== 'POST') {
+    res.writeHead(405);
+    res.end('Method Not Allowed');
     return;
   }
 
   try {
     const body = await readRequestBody(req);
-    const response = await processMcpRequest(body);
-    sendSuccessResponse(res, response);
+    const parsedBody = JSON.parse(body, (key, value) => {
+      // Prototype pollution protection
+      if (['__proto__', 'constructor', 'prototype'].includes(key)) {
+        throw new Error(`Dangerous key "${key}" blocked`);
+      }
+      return value;
+    });
+
+    // Create new transport for initialize requests or if none exists
+    if (!httpTransport || isInitializeRequest(parsedBody)) {
+      httpTransport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined, // Stateless mode
+        enableJsonResponse: true, // Return JSON directly instead of SSE
+      });
+
+      // Connect server to transport
+      await server.connect(httpTransport);
+    }
+
+    // Handle the request through the transport
+    await httpTransport.handleRequest(req, res, parsedBody);
   } catch (error) {
     sendErrorResponse(res, error);
   }
