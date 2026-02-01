@@ -11,10 +11,8 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { runTask, runContextTask, runSearchTask, runContentsTask } from './index.js';
-import { loadEnv } from './env.js';
 
-// Load environment
-loadEnv();
+// Env loaded lazily when first tool is called via runTask/etc
 
 // Create MCP server
 const server = new Server(
