@@ -5,6 +5,24 @@ All notable changes to ExaFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-02-01
+
+### 🐛 Bug Fixes
+- **ConcurrencyPool**: Fixed per-task resolver storage to prevent race conditions in concurrent operations
+- **HTTP Transport**: Replaced broken `server.request()` with proper `StreamableHTTPServerTransport` for MCP HTTP mode
+
+### 🔧 Technical Improvements
+- **MCP SDK Integration**: Updated to use `StreamableHTTPServerTransport` with JSON response mode for HTTP transport
+- **Code Quality**: Fixed code formatting across all source files with Prettier
+
+### 🛠️ CI/CD Improvements
+- **Workflow Dependencies**: Fixed job dependencies for artifact downloads
+- **Coverage Reporting**: Configured lcov output format for proper coverage artifacts
+- **Security Audit**: Simplified security scanning workflow
+- **Quality Gates**: Made TODO checks non-blocking, improved formatting checks
+
+---
+
 ## [2.1.1] - 2024-10-14
 
 ### 🐛 Bug Fixes
