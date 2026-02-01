@@ -22,19 +22,26 @@ describe('BaseExaClient', () => {
   describe('createResultEnvelope', () => {
     it('should create success envelope', () => {
       const client = new BaseExaClient('test-key');
-      const result = client.createResultEnvelope({ success: true, data: 'test' });
-      expect(result.success).toBe(true);
+      const startTime = Date.now() - 1000;
+      const result = client.createResultEnvelope<'test'>('success', 'task-123', startTime, [], 'test');
+      expect(result.status).toBe('success');
       expect(result.data).toBe('test');
+      expect(result.timing.duration).toBeDefined();
     });
 
     it('should create error envelope', () => {
       const client = new BaseExaClient('test-key');
-      const result = client.createResultEnvelope({ 
-        success: false, 
-        error: 'test error' 
-      });
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('test error');
+      const startTime = Date.now() - 1000;
+      const result = client.createResultEnvelope<'test'>(
+        'error',
+        'task-123',
+        startTime,
+        [],
+        undefined,
+        { code: 'TEST_ERROR', message: 'test error' }
+      );
+      expect(result.status).toBe('error');
+      expect(result.error?.message).toBe('test error');
     });
   });
 

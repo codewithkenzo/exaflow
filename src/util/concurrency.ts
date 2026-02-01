@@ -16,11 +16,11 @@ export class ConcurrencyPool<T> {
     resolve: (result: ConcurrencyResult<T>) => void;
     reject: (error: Error) => void;
   }> = [];
-  private completed = new Map<number, ConcurrencyResult<T>>();
+  private pendingResults = new Map<number, ConcurrencyResult<T>>();
   private nextIndex = 0;
 
   constructor(maxConcurrency: number, preserveOrder = true) {
-    this.maxConcurrency = maxConcurrency;
+    this.maxConcurrency = Math.max(1, maxConcurrency);
     this.preserveOrder = preserveOrder;
   }
 
@@ -28,7 +28,6 @@ export class ConcurrencyPool<T> {
     tasks: EnhancedTask[],
     executor: (task: EnhancedTask) => Promise<T>
   ): Promise<ConcurrencyResult<T>[]> {
-    const results: ConcurrencyResult<T>[] = [];
     const promises: Promise<ConcurrencyResult<T>>[] = [];
 
     for (let i = 0; i < tasks.length; i++) {
@@ -42,6 +41,7 @@ export class ConcurrencyPool<T> {
       });
 
       promises.push(promise);
+      // Start processing if we have capacity
       this.processQueue(executor);
     }
 
@@ -73,8 +73,8 @@ export class ConcurrencyPool<T> {
       };
 
       if (this.preserveOrder) {
-        this.completed.set(index, concurrencyResult);
-        this.drainCompleted();
+        this.pendingResults.set(index, concurrencyResult);
+        this.drainPending(resolve);
       } else {
         resolve(concurrencyResult);
       }
@@ -86,13 +86,12 @@ export class ConcurrencyPool<T> {
     }
   }
 
-  private drainCompleted(): void {
-    while (this.completed.has(this.nextIndex)) {
-      const result = this.completed.get(this.nextIndex)!;
-      this.completed.delete(this.nextIndex);
+  private drainPending(resolve: (result: ConcurrencyResult<T>) => void): void {
+    while (this.pendingResults.has(this.nextIndex)) {
+      const result = this.pendingResults.get(this.nextIndex)!;
+      this.pendingResults.delete(this.nextIndex);
       this.nextIndex++;
-      // In a real implementation, we'd need to store the resolve function
-      // For now, this is a simplified version
+      resolve(result);
     }
   }
 

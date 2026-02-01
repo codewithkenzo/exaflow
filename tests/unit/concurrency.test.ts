@@ -21,8 +21,16 @@ describe('ConcurrencyPool', () => {
 
   describe('execute', () => {
     it('should execute simple tasks', async () => {
-      const results = await pool.execute(['a', 'b', 'c'], async (item) => item.toUpperCase());
+      const tasks: EnhancedTask[] = [
+        { id: '1', type: 'search', input: { query: 'a' }, config: {} },
+        { id: '2', type: 'search', input: { query: 'b' }, config: {} },
+        { id: '3', type: 'search', input: { query: 'c' }, config: {} },
+      ];
+      const results = await pool.execute(tasks, async (task) => task.input.query.toUpperCase());
       expect(results.length).toBe(3);
+      expect(results[0].result).toBe('A');
+      expect(results[1].result).toBe('B');
+      expect(results[2].result).toBe('C');
     });
 
     it('should track stats', async () => {
