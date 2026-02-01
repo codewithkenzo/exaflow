@@ -33,3 +33,6 @@ report.*.json
 # Finder (MacOS) folder config
 .DS_Store
 tests/
+
+# Sisyphus plans (local development)
+.sisyphus/

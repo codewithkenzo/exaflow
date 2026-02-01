@@ -1,0 +1,91 @@
+# Greptile Configuration for Comprehensive Code Reviews
+# https://docs.greptile.com/config
+
+version: 1
+
+# Review settings
+review:
+  # Enable comprehensive reviews
+  comprehensive: true
+  
+  # Review all files, not just changed ones for context
+  context_files: true
+  
+  # Severity levels to flag
+  severity:
+    - critical
+    - high
+    - medium
+    - low
+  
+  # Categories to review
+  categories:
+    - security
+    - performance
+    - maintainability
+    - correctness
+    - best-practices
+    - error-handling
+    - type-safety
+    - documentation
+
+# Language-specific rules
+languages:
+  typescript:
+    # Strict TypeScript checks
+    strict_null_checks: true
+    no_any: true
+    no_implicit_any: true
+    
+    # Zod schema validation
+    zod:
+      require_parse: true
+      no_unsafe_parse: true
+    
+    # Error handling
+    require_error_handling: true
+    no_empty_catch: true
+
+# Project-specific context
+context:
+  description: |
+    Exaflow is a CLI tool that wraps the Exa API for semantic search, 
+    code context, content extraction, and research tasks. It includes 
+    an MCP server for AI client integration.
+  
+  key_files:
+    - src/schema.ts          # Zod schemas - must be correct
+    - src/cli.ts             # CLI entry point
+    - src/mcp-server.ts      # MCP protocol server
+    - src/clients/*.ts       # API clients
+  
+  patterns:
+    - "All API responses must use ResultEnvelope type"
+    - "All user input must be validated with Zod schemas"
+    - "CLI commands must handle errors gracefully"
+    - "MCP tools must have proper input validation"
+
+# Security checks
+security:
+  # Check for secrets
+  no_hardcoded_secrets: true
+  no_api_keys_in_code: true
+  
+  # Input validation
+  require_input_validation: true
+  no_eval: true
+  no_shell_injection: true
+
+# Pull request settings
+pull_request:
+  # Auto-review on PR
+  auto_review: true
+  
+  # Require approval for critical issues
+  block_on_critical: true
+  
+  # Add inline comments
+  inline_comments: true
+  
+  # Summary comment
+  summary_comment: true

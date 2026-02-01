@@ -10,7 +10,8 @@
   },
   "private": false,
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
   },
   "scripts": {
     "build": "bun build src/index.ts --outdir dist --target bun && bun build src/cli.ts --outdir dist --target bun && bun build src/mcp-server.ts --outdir dist --target bun",
