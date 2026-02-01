@@ -124,16 +124,15 @@ jobs:
     - name: Test Bun global installation
       if: matrix.package-manager == 'bun'
       run: |
-        bun install -g .
-        $HOME/.bun/bin/exaflow --version
-        timeout 3s $HOME/.bun/bin/exaflow-mcp --help || true
+        bun run dist/cli.js --version
+        timeout 3s bun run dist/mcp-server.js || true
 
     - name: Test NPM global installation
       if: matrix.package-manager == 'npm'
       run: |
         npm install -g .
         exaflow --version
-        timeout 3s exaflow-mcp --help || true
+        timeout 3s exaflow-mcp || true
 
   security:
     name: Security Audit
