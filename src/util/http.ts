@@ -291,37 +291,27 @@ export class HttpClient {
               body,
               signal: controller.signal,
             })) as {
-              body: unknown;
+              body: { text: () => Promise<string>; json: () => Promise<unknown> } | unknown;
               statusCode: number;
               reasonPhrase: string;
               headers: Record<string, string>;
             };
 
             // Convert undici response to fetch Response
-            // Handle undici response which might have different structure
-            const undiciBody = undiciResponse.body ?? null;
-
-            // Safely convert undici body to fetch BodyInit
-            let responseBody: BodyInit | null = null;
-            if (undiciBody !== null) {
-              if (typeof undiciBody === 'string') {
+            // Handle undici response - the body is a stream that needs to be consumed
+            let responseBody: string | null = null;
+            const undiciBody = undiciResponse.body;
+            
+            if (undiciBody !== null && undiciBody !== undefined) {
+              // Check if it's an undici body with .text() method
+              if (typeof undiciBody === 'object' && 'text' in undiciBody && typeof (undiciBody as { text: () => Promise<string> }).text === 'function') {
+                responseBody = await (undiciBody as { text: () => Promise<string> }).text();
+              } else if (typeof undiciBody === 'string') {
                 responseBody = undiciBody;
-              } else if (undiciBody instanceof Uint8Array) {
-                responseBody = new ReadableStream({
-                  start(controller) {
-                    controller.enqueue(undiciBody);
-                    controller.close();
-                  },
-                });
               } else if (Buffer.isBuffer(undiciBody)) {
-                responseBody = new ReadableStream({
-                  start(controller) {
-                    controller.enqueue(new Uint8Array(undiciBody));
-                    controller.close();
-                  },
-                });
-              } else {
-                responseBody = null;
+                responseBody = undiciBody.toString('utf-8');
+              } else if (undiciBody instanceof Uint8Array) {
+                responseBody = new TextDecoder().decode(undiciBody);
               }
             }
 
@@ -447,4 +437,4 @@ export class RateLimiter {
 }
 
 // Global HTTP client instance
-export const httpClient = new HttpClient();
+export const httpClient = new HttpClient(undefined, undefined, false);

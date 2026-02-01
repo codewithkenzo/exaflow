@@ -352,7 +352,7 @@ const program = new Command();
 program
   .name('exaflow')
   .description('ExaFlow: Advanced Semantic Search Tool with MCP Server Integration')
-  .version('2.0.0');
+  .version('2.2.1');
 
 // Global options
 program

@@ -1,6 +1,6 @@
 {
   "name": "exaflow",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "🚀 Advanced semantic search & AI integration toolkit with Exa API and MCP server support",
   "main": "dist/index.js",
   "type": "module",

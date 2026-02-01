@@ -17,7 +17,7 @@ const ContentResultSchema = z.object({
   url: z.string().url(),
   title: z.string(),
   publishedDate: z.string().datetime().optional(),
-  author: z.string().optional(),
+  author: z.string().nullable().optional(),
   text: z.string().optional(),
   extractedAt: z.string().datetime().optional(),
   crawlTime: z.number().optional(),
