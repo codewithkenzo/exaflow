@@ -12,13 +12,14 @@ const CreateResearchTaskRequestSchema = z.object({
 });
 
 const ResearchTaskResponseSchema = z.object({
-  id: z.string(),
-  instructions: z.string(),
-  model: z.string(),
-  status: z.enum(['pending', 'running', 'completed', 'failed']),
-  createdAt: z.string().datetime(),
-  startedAt: z.string().datetime().optional(),
-  completedAt: z.string().datetime().optional(),
+  id: z.string().optional(),
+  researchId: z.string().optional(), // API may return researchId instead of id
+  instructions: z.string().optional(),
+  model: z.string().optional(),
+  status: z.enum(['pending', 'running', 'completed', 'failed']).optional(),
+  createdAt: z.union([z.string(), z.number()]).optional(), // API returns timestamp as number
+  startedAt: z.union([z.string(), z.number()]).optional(),
+  completedAt: z.union([z.string(), z.number()]).optional(),
   result: z.any().optional(),
   error: z.string().optional(),
   outputSchema: z.record(z.any()).optional(),
@@ -90,7 +91,7 @@ export class ExaResearchClient extends BaseExaClient {
     // Use base class executeRequest method
     const result = await this.executeRequest(
       'POST',
-      '/research',
+      '/research/v1',
       request,
       ResearchTaskResponseSchema,
       actualTaskId,
@@ -135,7 +136,7 @@ export class ExaResearchClient extends BaseExaClient {
     // Use base class executeRequest method
     const result = await this.executeRequest(
       'GET',
-      `/research/${taskId}`,
+      `/research/v1/${taskId}`,
       null,
       ResearchTaskResponseSchema,
       actualTaskId,
@@ -201,7 +202,7 @@ export class ExaResearchClient extends BaseExaClient {
     // Use base class executeRequest method
     const result = await this.executeRequest(
       'GET',
-      `/research?${params}`,
+      `/research/v1?${params}`,
       null,
       ResearchTaskListResponseSchema,
       actualTaskId,
@@ -258,11 +259,11 @@ export class ExaResearchClient extends BaseExaClient {
         // Transform task result to research result format
         if (researchTask.status === 'completed') {
           const researchResult: ResearchResult = {
-            taskId: researchTask.id,
+            taskId: researchTask.id || researchTask.researchId || '',
             status: 'completed',
             result: researchTask.result,
             metadata: {
-              model: researchTask.model,
+              model: researchTask.model || 'exa-research',
               processingTime:
                 researchTask.completedAt && researchTask.startedAt
                   ? new Date(researchTask.completedAt).getTime() -
@@ -291,14 +292,14 @@ export class ExaResearchClient extends BaseExaClient {
             status: 'failed',
             error: researchTask.error || 'Unknown error',
             data: {
-              taskId: researchTask.id,
+              taskId: researchTask.id || researchTask.researchId || '',
               status: 'failed',
               error: researchTask.error || 'Unknown error',
             },
           };
         }
 
-        return { status: researchTask.status };
+        return { status: researchTask.status || 'pending' };
       },
       // Completion check
       status => status === 'completed',
@@ -366,7 +367,15 @@ export class ExaResearchClient extends BaseExaClient {
       return createResult as unknown as ResultEnvelope<ResearchResult>;
     }
 
-    const researchTaskId = createResult.data.id;
+    const researchTaskId = createResult.data.id || createResult.data.researchId || '';
+
+    if (!researchTaskId) {
+      return {
+        status: 'error',
+        error: { code: 'RESEARCH_CREATE_ERROR', message: 'No research task ID returned' },
+        data: { taskId: '', status: 'failed' as const, error: 'No research task ID' },
+      } as ResultEnvelope<ResearchResult>;
+    }
 
     if (!poll) {
       // Return the task creation result without polling
@@ -406,7 +415,15 @@ export class ExaResearchClient extends BaseExaClient {
       return createResult as unknown as ResultEnvelope<ResearchResult>;
     }
 
-    const researchTaskId = createResult.data.id;
+    const researchTaskId = createResult.data.id || createResult.data.researchId || '';
+
+    if (!researchTaskId) {
+      return {
+        status: 'error',
+        error: { code: 'RESEARCH_CREATE_ERROR', message: 'No research task ID returned' },
+        data: { taskId: '', status: 'failed' as const, error: 'No research task ID' },
+      } as ResultEnvelope<ResearchResult>;
+    }
 
     if (!poll) {
       return {

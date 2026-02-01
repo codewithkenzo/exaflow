@@ -120,7 +120,7 @@ export class ExaWebsetsClient extends BaseExaClient {
     // Use base class executeRequest method
     const result = await this.executeRequest(
       'POST',
-      '/websets',
+      '/websets/v0/websets',
       request,
       CreateWebsetResponseSchema,
       actualTaskId,
@@ -166,7 +166,7 @@ export class ExaWebsetsClient extends BaseExaClient {
     // Use base class executeRequest method
     const result = await this.executeRequest(
       'POST',
-      `/websets/${websetId}/searches`,
+      `/websets/v0/websets/${websetId}/searches`,
       request,
       CreateWebsetSearchResponseSchema,
       actualTaskId,
@@ -230,7 +230,7 @@ export class ExaWebsetsClient extends BaseExaClient {
     // Use base class executeRequest method
     const result = await this.executeRequest(
       'GET',
-      `/websets/${websetId}/items?${params}`,
+      `/websets/v0/websets/${websetId}/items?${params}`,
       null,
       ListWebsetItemsResponseSchema,
       actualTaskId,
@@ -292,7 +292,7 @@ export class ExaWebsetsClient extends BaseExaClient {
     // Use base class executeRequest method
     const result = await this.executeRequest(
       'POST',
-      `/websets/${websetId}/enrichments`,
+      `/websets/v0/websets/${websetId}/enrichments`,
       request,
       EnrichResponseSchema,
       actualTaskId,
@@ -340,7 +340,7 @@ export class ExaWebsetsClient extends BaseExaClient {
         // Use base class executeRequest to get search status
         const result = await this.executeRequest(
           'GET',
-          `/websets/${websetId}/searches/${searchId}`,
+          `/websets/v0/websets/${websetId}/searches/${searchId}`,
           null,
           WebsetSearchSchema,
           actualTaskId,

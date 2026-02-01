@@ -388,7 +388,7 @@ program
         if (
           command !== 'bun' ||
           !Array.isArray(args) ||
-          args.length !== 3 ||
+          args.length !== 2 ||
           args[0] !== 'run' ||
           !args[1].endsWith('mcp-server.js')
         ) {
