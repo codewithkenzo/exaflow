@@ -79,17 +79,17 @@
   "author": {
     "name": "ExaFlow",
     "email": "support@exaflow.dev",
-    "url": "https://github.com/codewithkenzo/exa-personal-tool"
+    "url": "https://github.com/codewithkenzo/exaflow"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/codewithkenzo/exa-personal-tool.git"
+    "url": "https://github.com/codewithkenzo/exaflow.git"
   },
   "bugs": {
-    "url": "https://github.com/codewithkenzo/exa-personal-tool/issues"
+    "url": "https://github.com/codewithkenzo/exaflow/issues"
   },
-  "homepage": "https://github.com/codewithkenzo/exa-personal-tool#readme",
+  "homepage": "https://github.com/codewithkenzo/exaflow#readme",
   "engines": {
     "node": ">=18.0.0",
     "bun": ">=1.0.0"
