@@ -1,23 +1,23 @@
+<p align="center"><img src="assets/logo.png" width="120" alt="exaflow logo"></p>
+
 # ExaFlow: Advanced Semantic Search & AI Integration
 
-[![npm version](https://badge.fury.io/js/exaflow.svg)](https://badge.fury.io/js/exaflow)
-[![Build Status](https://github.com/codewithkenzo/exaflow/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/codewithkenzo/exaflow/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<div align="center">
+
+[![npm version](https://img.shields.io/npm/v/exaflow)](https://www.npmjs.com/package/exaflow)
+[![npm downloads](https://img.shields.io/npm/dm/exaflow)](https://www.npmjs.com/package/exaflow)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-100%25-blue.svg)](https://www.typescriptlang.org/)
 
 **AI-Powered Search • Intelligent Content • MCP Integration • Lightning Fast**
+
+</div>
 
 ## Why ExaFlow?
 
 ExaFlow is a semantic search toolkit for modern developers and AI applications. Built with TypeScript, it combines Exa's neural search with intelligent caching, real-time streaming, and MCP (Model Context Protocol) integration.
 
-## What's New in 2.2.0
-
-- Fixed ConcurrencyPool per-task resolver storage
-- Improved MCP HTTP transport with StreamableHTTPServerTransport
-- CI/CD improvements and code quality fixes
-
-**Perfect For:**
+## Perfect For
 - AI Applications with enhanced search capabilities
 - Research automation with multi-step pipelines
 - Content analysis with live crawling
@@ -26,21 +26,19 @@ ExaFlow is a semantic search toolkit for modern developers and AI applications. 
 
 ## Installation
 
+**Recommended: Bun runtime**
 ```bash
-# Recommended: Bun runtime
 bun install -g exaflow
-
-# Alternative: NPM
-npm install -g exaflow
-
-# Verify installation
-exaflow --version
 ```
 
-### GitHub Packages
-
+**Alternative: NPM**
 ```bash
-npm install @codewithkenzo/exaflow --registry=https://npm.pkg.github.com
+npm install -g exaflow
+```
+
+**Verify installation**
+```bash
+exaflow --version
 ```
 
 ## Environment Setup
@@ -202,6 +200,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **[Bun](https://bun.sh)** - JavaScript runtime
 - **[MCP](https://modelcontextprotocol.io/)** - AI integration protocol
 - **[TypeScript](https://www.typescriptlang.org/)** - Type-safe development
+
+## Keywords
+
+<div align="center">
+
+[![semantic-search](https://img.shields.io/badge/semantic-search-blue)](https://github.com/codewithkenzo/exaflow)
+[![exa-api](https://img.shields.io/badge/exa-api-blue)](https://exa.ai)
+[![ai-integration](https://img.shields.io/badge/ai-integration-blue)](https://github.com/codewithkenzo/exaflow)
+[![mcp-protocol](https://img.shields.io/badge/mcp-protocol-blue)](https://modelcontextprotocol.io/)
+[![typescript](https://img.shields.io/badge/typescript-toolkit-blue)](https://www.typescriptlang.org/)
+[![cli-tool](https://img.shields.io/badge/cli-tool-blue)](https://github.com/codewithkenzo/exaflow)
+
+</div>
 
 ## Support
 
