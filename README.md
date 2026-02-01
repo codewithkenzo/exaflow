@@ -11,6 +11,12 @@
 
 ExaFlow is a semantic search toolkit for modern developers and AI applications. Built with TypeScript, it combines Exa's neural search with intelligent caching, real-time streaming, and MCP (Model Context Protocol) integration.
 
+## What's New in 2.2.0
+
+- Fixed ConcurrencyPool per-task resolver storage
+- Improved MCP HTTP transport with StreamableHTTPServerTransport
+- CI/CD improvements and code quality fixes
+
 **Perfect For:**
 - AI Applications with enhanced search capabilities
 - Research automation with multi-step pipelines
@@ -29,6 +35,12 @@ npm install -g exaflow
 
 # Verify installation
 exaflow --version
+```
+
+### GitHub Packages
+
+```bash
+npm install @codewithkenzo/exaflow --registry=https://npm.pkg.github.com
 ```
 
 ## Environment Setup
