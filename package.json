@@ -14,7 +14,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target bun && bun build src/cli.ts --outdir dist --target bun && bun build src/mcp-server.ts --outdir dist --target bun",
+    "build": "bun build src/index.ts --outdir dist --target node && bun build src/cli.ts --outdir dist --target node && bun build src/mcp-server.ts --outdir dist --target node",
     "dev": "bunx tsx src/cli.ts",
     "dev:mcp": "bunx tsx src/mcp-server.ts",
     "test": "bun test",

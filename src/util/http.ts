@@ -301,10 +301,14 @@ export class HttpClient {
             // Handle undici response - the body is a stream that needs to be consumed
             let responseBody: string | null = null;
             const undiciBody = undiciResponse.body;
-            
+
             if (undiciBody !== null && undiciBody !== undefined) {
               // Check if it's an undici body with .text() method
-              if (typeof undiciBody === 'object' && 'text' in undiciBody && typeof (undiciBody as { text: () => Promise<string> }).text === 'function') {
+              if (
+                typeof undiciBody === 'object' &&
+                'text' in undiciBody &&
+                typeof (undiciBody as { text: () => Promise<string> }).text === 'function'
+              ) {
                 responseBody = await (undiciBody as { text: () => Promise<string> }).text();
               } else if (typeof undiciBody === 'string') {
                 responseBody = undiciBody;
